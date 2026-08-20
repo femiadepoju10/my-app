@@ -22,8 +22,9 @@ export default function Home() {
               </span>
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-zinc-600 dark:text-zinc-400 animate-slide-up" style={{ animationDelay: "0.1s" }}>
-              Your payment is protected until you confirm that you received the
-              item as expected. No risks, no worries.
+              A peer-to-peer marketplace where sellers list items and buyers pay
+              through the platform — your money is held safely until you receive
+              and approve what you bought.
             </p>
             <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row animate-slide-up" style={{ animationDelay: "0.2s" }}>
               <Link

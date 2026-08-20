@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "PassitOn",
   description:
-    "Buy and sell with confidence. Your payment is protected until you confirm that you received the item as expected.",
+    "Buy and sell with escrow protection. Your payment is held safely until you confirm delivery.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
