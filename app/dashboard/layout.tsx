@@ -1,6 +1,15 @@
-import Link from "next/link";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import NavTabs from "@/components/layout/NavTabs";
+
+const DASHBOARD_TABS = [
+  { href: "/dashboard", label: "Overview" },
+  { href: "/dashboard/listings", label: "My Listings" },
+  { href: "/dashboard/purchases", label: "My Purchases" },
+  { href: "/dashboard/sales", label: "My Sales" },
+  { href: "/dashboard/messages", label: "Messages" },
+  { href: "/dashboard/profile", label: "Profile" },
+];
 
 export default async function DashboardLayout({
   children,
@@ -21,32 +30,7 @@ export default async function DashboardLayout({
         </p>
       </div>
 
-      <div className="mb-8 flex gap-4 border-b border-zinc-200 dark:border-zinc-800">
-        <Link
-          href="/dashboard"
-          className="border-b-2 border-transparent pb-3 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
-        >
-          Overview
-        </Link>
-        <Link
-          href="/dashboard/listings"
-          className="border-b-2 border-transparent pb-3 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
-        >
-          My Listings
-        </Link>
-        <Link
-          href="/dashboard/purchases"
-          className="border-b-2 border-transparent pb-3 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
-        >
-          My Purchases
-        </Link>
-        <Link
-          href="/dashboard/sales"
-          className="border-b-2 border-transparent pb-3 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
-        >
-          My Sales
-        </Link>
-      </div>
+      <NavTabs tabs={DASHBOARD_TABS} />
 
       {children}
     </div>

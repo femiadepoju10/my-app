@@ -1,17 +1,18 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { products, productImages, users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { products, productImages, users, transactions } from "@/lib/db/schema";
+import { eq, and, notInArray } from "drizzle-orm";
 import { z } from "zod";
+import cloudinary from "@/lib/cloudinary";
 
 const updateProductSchema = z.object({
-  title: z.string().min(3).optional(),
-  description: z.string().min(10).optional(),
+  title: z.string().min(3).max(200).optional(),
+  description: z.string().min(10).max(5000).optional(),
   category: z.string().min(1).optional(),
   condition: z.enum(["new", "like_new", "good", "fair", "used"]).optional(),
-  price: z.number().min(1).optional(),
-  location: z.string().min(2).optional(),
+  price: z.number().int().min(1).optional(),
+  location: z.string().min(2).max(200).optional(),
   images: z.array(z.string()).min(1).max(5).optional(),
 });
 
@@ -106,6 +107,18 @@ export async function PATCH(
     .where(eq(products.id, productId));
 
   if (images) {
+    const oldImages = await db
+      .select()
+      .from(productImages)
+      .where(eq(productImages.productId, productId));
+
+    for (const img of oldImages) {
+      const match = img.imageUrl.match(/\/upload\/(?:v\d+\/)?(.+)\.\w+$/);
+      if (match) {
+        cloudinary.uploader.destroy(match[1]).catch(() => {});
+      }
+    }
+
     await db
       .delete(productImages)
       .where(eq(productImages.productId, productId));
@@ -155,6 +168,36 @@ export async function DELETE(
       { error: "Cannot delete a sold product" },
       { status: 400 }
     );
+  }
+
+  const activeTransaction = await db
+    .select()
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.productId, productId),
+        notInArray(transactions.status, ["completed", "refund_completed", "rejected", "disputed"])
+      )
+    )
+    .get();
+
+  if (activeTransaction) {
+    return NextResponse.json(
+      { error: "Cannot remove a listing with active transactions" },
+      { status: 400 }
+    );
+  }
+
+  const imagesToDelete = await db
+    .select()
+    .from(productImages)
+    .where(eq(productImages.productId, productId));
+
+  for (const img of imagesToDelete) {
+    const match = img.imageUrl.match(/\/upload\/(?:v\d+\/)?(.+)\.\w+$/);
+    if (match) {
+      cloudinary.uploader.destroy(match[1]).catch(() => {});
+    }
   }
 
   await db

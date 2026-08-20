@@ -1,11 +1,22 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import cloudinary from "@/lib/cloudinary";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const ip = getClientIp(req);
+  const { allowed, retryAfterMs } = checkRateLimit(`upload:${ip}`, 20, 60 * 60 * 1000);
+
+  if (!allowed) {
+    return NextResponse.json(
+      { error: `Upload limit reached. Try again in ${Math.ceil(retryAfterMs / 60000)} minutes.` },
+      { status: 429 }
+    );
   }
 
   const formData = await req.formData();

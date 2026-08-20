@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { formatPrice, formatCondition } from "@/lib/utils";
+import ReviewSection from "@/components/products/ReviewSection";
 
 interface ProductImage {
   imageUrl: string;
@@ -41,27 +42,40 @@ export default function ProductDetailsPage() {
   const [selectedImage, setSelectedImage] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
     async function fetchProduct() {
       const res = await fetch(`/api/products/${params.id}`);
+      if (cancelled) return;
       if (!res.ok) {
         router.push("/products");
         return;
       }
       try {
         const data = await res.json();
-        setProduct(data.product);
+        if (!cancelled) {
+          setProduct(data.product);
+        }
       } catch {
-        router.push("/products");
+        if (!cancelled) {
+          router.push("/products");
+        }
         return;
       }
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     }
     fetchProduct();
+    return () => { cancelled = true; };
   }, [params.id, router]);
 
-  if (loading || !product) {
+  if (loading) {
     return (
       <div className="py-20 text-center text-zinc-500">Loading...</div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <div className="py-20 text-center text-zinc-500">Product not found</div>
     );
   }
 
@@ -70,6 +84,7 @@ export default function ProductDetailsPage() {
   const isOwner = session?.user?.id === String(product.sellerId);
 
   return (
+    <>
     <div className="grid gap-8 lg:grid-cols-2">
       {/* Images */}
       <div>
@@ -122,6 +137,10 @@ export default function ProductDetailsPage() {
 
         <p className="mt-2 text-3xl font-bold text-emerald-600 dark:text-emerald-400">
           {formatPrice(product.price)}
+        </p>
+
+        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+          Seller: {product.seller.name}
         </p>
 
         {/* Fee breakdown */}
@@ -227,6 +246,18 @@ export default function ProductDetailsPage() {
           </p>
         </div>
       </div>
+
+      {/* Reviews Section - below the two-column grid */}
     </div>
+
+    <div className="mt-8">
+      <ReviewSection
+        productId={product.id}
+        isCompleted={false}
+        isBuyer={false}
+        transactionId={0}
+      />
+    </div>
+  </>
   );
 }

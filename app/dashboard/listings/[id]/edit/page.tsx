@@ -8,6 +8,12 @@ export default function EditListingPage() {
   const router = useRouter();
   const params = useParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("");
+  const [condition, setCondition] = useState("");
+  const [price, setPrice] = useState("");
+  const [location, setLocation] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
@@ -24,22 +30,13 @@ export default function EditListingPage() {
       }
       const data = await res.json();
       const p = data.product;
+      setTitle(p.title);
+      setDescription(p.description);
+      setCategory(p.category);
+      setCondition(p.condition);
+      setPrice(String(p.price / 100));
+      setLocation(p.location);
       setImages(p.images.map((img: { imageUrl: string }) => img.imageUrl));
-      const form = document.getElementById("edit-form") as HTMLFormElement;
-      if (form) {
-        (form.elements.namedItem("title") as HTMLInputElement).value = p.title;
-        (form.elements.namedItem("description") as HTMLTextAreaElement).value =
-          p.description;
-        (form.elements.namedItem("category") as HTMLSelectElement).value =
-          p.category;
-        (form.elements.namedItem("condition") as HTMLSelectElement).value =
-          p.condition;
-        (form.elements.namedItem("price") as HTMLInputElement).value = String(
-          p.price / 100
-        );
-        (form.elements.namedItem("location") as HTMLInputElement).value =
-          p.location;
-      }
       setLoading(false);
     }
     fetchProduct();
@@ -58,6 +55,11 @@ export default function EditListingPage() {
     setErrors({});
 
     for (const file of Array.from(files)) {
+      if (file.size > 5 * 1024 * 1024) {
+        setErrors({ images: ["Image must be less than 5MB"] });
+        setUploading(false);
+        return;
+      }
       const formData = new FormData();
       formData.append("file", file);
       try {
@@ -93,15 +95,13 @@ export default function EditListingPage() {
     setServerError("");
     setSaving(true);
 
-    const formData = new FormData(e.currentTarget);
-
     const body = {
-      title: formData.get("title"),
-      description: formData.get("description"),
-      category: formData.get("category"),
-      condition: formData.get("condition"),
-      price: Math.round(parseFloat(formData.get("price") as string) * 100) || 0,
-      location: formData.get("location"),
+      title,
+      description,
+      category,
+      condition,
+      price: Math.round(parseFloat(price) * 100) || 0,
+      location,
       images,
     };
 
@@ -146,7 +146,7 @@ export default function EditListingPage() {
         Edit Listing
       </h1>
 
-      <form id="edit-form" onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6">
         {serverError && (
           <div className="rounded-md bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
             {serverError}
@@ -202,7 +202,7 @@ export default function EditListingPage() {
           >
             Title
           </label>
-          <input id="title" name="title" type="text" required className={inputClass} />
+          <input id="title" type="text" required value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} className={inputClass} />
           {errors.title && (
             <p className="mt-1 text-xs text-red-600">{errors.title[0]}</p>
           )}
@@ -217,9 +217,11 @@ export default function EditListingPage() {
           </label>
           <textarea
             id="description"
-            name="description"
             required
             rows={4}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            maxLength={5000}
             className={inputClass}
           />
           {errors.description && (
@@ -235,7 +237,7 @@ export default function EditListingPage() {
             >
               Category
             </label>
-            <select id="category" name="category" required className={inputClass}>
+            <select id="category" required value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass}>
               <option value="">Select category</option>
               {CATEGORIES.map((cat) => (
                 <option key={cat} value={cat}>
@@ -252,7 +254,7 @@ export default function EditListingPage() {
             >
               Condition
             </label>
-            <select id="condition" name="condition" required className={inputClass}>
+            <select id="condition" required value={condition} onChange={(e) => setCondition(e.target.value)} className={inputClass}>
               <option value="">Select condition</option>
               {CONDITIONS.map((c) => (
                 <option key={c.value} value={c.value}>
@@ -273,10 +275,11 @@ export default function EditListingPage() {
             </label>
             <input
               id="price"
-              name="price"
               type="number"
               min="1"
               required
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
               className={inputClass}
             />
           </div>
@@ -290,9 +293,11 @@ export default function EditListingPage() {
             </label>
             <input
               id="location"
-              name="location"
               type="text"
               required
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              maxLength={200}
               className={inputClass}
             />
           </div>

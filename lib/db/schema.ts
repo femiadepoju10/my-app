@@ -7,6 +7,11 @@ export const users = sqliteTable("users", {
   phone: text("phone"),
   passwordHash: text("password_hash").notNull(),
   role: text("role", { enum: ["user", "admin"] }).notNull().default("user"),
+  emailVerified: text("email_verified"),
+  verificationToken: text("verification_token"),
+  verificationTokenExpiry: text("verification_token_expiry"),
+  resetToken: text("reset_token"),
+  resetTokenExpiry: text("reset_token_expiry"),
   createdAt: text("created_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
@@ -178,4 +183,81 @@ export const refunds = sqliteTable(
       .$defaultFn(() => new Date().toISOString()),
   },
   (t) => [index("idx_refunds_transaction").on(t.transactionId)]
+);
+
+export const conversations = sqliteTable(
+  "conversations",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    transactionId: integer("transaction_id")
+      .notNull()
+      .references(() => transactions.id),
+    buyerId: integer("buyer_id")
+      .notNull()
+      .references(() => users.id),
+    sellerId: integer("seller_id")
+      .notNull()
+      .references(() => users.id),
+    lastMessageAt: text("last_message_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [
+    index("idx_conversations_transaction").on(t.transactionId),
+    index("idx_conversations_buyer").on(t.buyerId),
+    index("idx_conversations_seller").on(t.sellerId),
+  ]
+);
+
+export const messages = sqliteTable(
+  "messages",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    conversationId: integer("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    senderId: integer("sender_id")
+      .notNull()
+      .references(() => users.id),
+    content: text("content").notNull(),
+    readAt: text("read_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [
+    index("idx_messages_conversation").on(t.conversationId),
+    index("idx_messages_sender").on(t.senderId),
+  ]
+);
+
+export const reviews = sqliteTable(
+  "reviews",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    transactionId: integer("transaction_id")
+      .notNull()
+      .references(() => transactions.id)
+      .unique(),
+    productId: integer("product_id")
+      .notNull()
+      .references(() => products.id),
+    reviewerId: integer("reviewer_id")
+      .notNull()
+      .references(() => users.id),
+    revieweeId: integer("reviewee_id")
+      .notNull()
+      .references(() => users.id),
+    rating: integer("rating").notNull(),
+    comment: text("comment"),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [
+    index("idx_reviews_product").on(t.productId),
+    index("idx_reviews_reviewee").on(t.revieweeId),
+    index("idx_reviews_transaction").on(t.transactionId),
+  ]
 );

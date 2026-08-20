@@ -12,6 +12,7 @@ import {
 } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { initializeTransaction } from "@/lib/paystack";
+import { sendTransactionEmail } from "@/lib/email";
 import crypto from "crypto";
 
 export async function GET(
@@ -188,9 +189,9 @@ export async function PATCH(
     );
   }
 
-  if (transaction.status === "inspection_pending" && newStatus === "accepted" && !isBuyer) {
+  if (transaction.status === "inspection_pending" && newStatus === "accepted" && !isBuyer && session.user.role !== "admin") {
     return NextResponse.json(
-      { error: "Only the buyer can accept an item" },
+      { error: "Only the buyer or admin can accept an item" },
       { status: 403 }
     );
   }
@@ -198,6 +199,13 @@ export async function PATCH(
   if (transaction.status === "inspection_pending" && newStatus === "rejected" && !isBuyer) {
     return NextResponse.json(
       { error: "Only the buyer can reject an item" },
+      { status: 403 }
+    );
+  }
+
+  if (transaction.status === "disputed" && newStatus === "accepted" && !isBuyer && session.user.role !== "admin") {
+    return NextResponse.json(
+      { error: "Only the buyer or admin can accept an item during a dispute" },
       { status: 403 }
     );
   }
@@ -251,60 +259,83 @@ export async function PATCH(
     updateData.disputeNote = body.disputeNote;
   }
 
-  if (newStatus === "payout_pending" || newStatus === "completed") {
-    await db
-      .update(products)
-      .set({ status: "sold", updatedAt: new Date().toISOString() })
-      .where(eq(products.id, transaction.productId));
-  }
+  const finalStatus = newStatus === "accepted" ? "payout_pending" : newStatus;
 
-  if (newStatus === "payout_pending") {
-    const existingPayout = await db
-      .select()
-      .from(payouts)
-      .where(eq(payouts.transactionId, transactionId))
-      .get();
-
-    if (!existingPayout) {
-      await db.insert(payouts).values({
-        transactionId,
-        sellerId: transaction.sellerId,
-        amount: transaction.itemPrice,
-        status: "pending",
-      });
+  await db.transaction(async (tx) => {
+    if (finalStatus === "payout_pending" || finalStatus === "completed") {
+      await tx
+        .update(products)
+        .set({ status: "sold", updatedAt: new Date().toISOString() })
+        .where(eq(products.id, transaction.productId));
     }
-  }
 
-  if (newStatus === "refund_pending") {
-    const existingRefund = await db
-      .select()
-      .from(refunds)
-      .where(eq(refunds.transactionId, transactionId))
-      .get();
+    if (finalStatus === "payout_pending") {
+      const existingPayout = await tx
+        .select()
+        .from(payouts)
+        .where(eq(payouts.transactionId, transactionId))
+        .get();
 
-    if (!existingRefund) {
-      await db.insert(refunds).values({
-        transactionId,
-        amount: transaction.totalAmount,
-        reason: body.rejectionReason || null,
-        status: "pending",
-      });
+      if (!existingPayout) {
+        await tx.insert(payouts).values({
+          transactionId,
+          sellerId: transaction.sellerId,
+          amount: transaction.itemPrice,
+          status: "pending",
+        });
+      }
     }
+
+    if (finalStatus === "refund_pending") {
+      const existingRefund = await tx
+        .select()
+        .from(refunds)
+        .where(eq(refunds.transactionId, transactionId))
+        .get();
+
+      if (!existingRefund) {
+        await tx.insert(refunds).values({
+          transactionId,
+          amount: transaction.totalAmount,
+          reason: body.rejectionReason || null,
+          status: "pending",
+        });
+      }
+    }
+
+    if (finalStatus === "rejected" || finalStatus === "refund_pending" || finalStatus === "disputed") {
+      await tx
+        .update(products)
+        .set({ status: "active", updatedAt: new Date().toISOString() })
+        .where(eq(products.id, transaction.productId));
+    }
+
+    if (finalStatus === "payout_completed") {
+      await tx
+        .update(payouts)
+        .set({ status: "completed", paidAt: new Date().toISOString() })
+        .where(eq(payouts.transactionId, transactionId));
+    }
+
+    if (finalStatus === "refund_completed") {
+      await tx
+        .update(refunds)
+        .set({ status: "completed" })
+        .where(eq(refunds.transactionId, transactionId));
+    }
+
+    await tx
+      .update(transactions)
+      .set({ ...updateData, status: finalStatus })
+      .where(eq(transactions.id, transactionId));
+  });
+
+  if (newStatus === "accepted") {
+    sendTransactionEmail(transactionId, "payout_pending").catch(() => {});
   }
+  sendTransactionEmail(transactionId, finalStatus).catch(() => {});
 
-  if (newStatus === "rejected" || newStatus === "refund_pending" || newStatus === "disputed") {
-    await db
-      .update(products)
-      .set({ status: "active", updatedAt: new Date().toISOString() })
-      .where(eq(products.id, transaction.productId));
-  }
-
-  await db
-    .update(transactions)
-    .set(updateData)
-    .where(eq(transactions.id, transactionId));
-
-  return NextResponse.json({ success: true, status: newStatus });
+  return NextResponse.json({ success: true, status: finalStatus });
 }
 
 export async function POST(

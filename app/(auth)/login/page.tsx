@@ -21,21 +21,26 @@ function LoginContent() {
     setError("");
     setLoading(true);
 
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
 
-    setLoading(false);
+      setLoading(false);
 
-    if (result?.error) {
-      setError("Invalid email or password");
-      return;
+      if (result?.error) {
+        setError("Invalid email or password");
+        return;
+      }
+
+      router.push(callbackUrl);
+      router.refresh();
+    } catch {
+      setLoading(false);
+      setError("Something went wrong. Please try again.");
     }
-
-    router.push(callbackUrl);
-    router.refresh();
   }
 
   return (
@@ -45,7 +50,7 @@ function LoginContent() {
           Welcome back
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Log in to your Skillbridge account
+          Log in to your PassOn account
         </p>
       </div>
 
@@ -99,6 +104,9 @@ function LoginContent() {
             className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
             placeholder="Your password"
           />
+          <Link href="/forgot-password" className="mt-1 inline-block text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300">
+            Forgot your password?
+          </Link>
         </div>
 
         <button

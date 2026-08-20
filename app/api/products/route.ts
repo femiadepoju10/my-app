@@ -2,16 +2,16 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { products, productImages } from "@/lib/db/schema";
-import { eq, desc, like, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, gte, lte } from "drizzle-orm";
 import { z } from "zod";
 
 const productSchema = z.object({
-  title: z.string().min(3, "Title must be at least 3 characters"),
-  description: z.string().min(10, "Description must be at least 10 characters"),
+  title: z.string().min(3, "Title must be at least 3 characters").max(200, "Title must be at most 200 characters"),
+  description: z.string().min(10, "Description must be at least 10 characters").max(5000, "Description must be at most 5000 characters"),
   category: z.string().min(1, "Category is required"),
   condition: z.enum(["new", "like_new", "good", "fair", "used"]),
   price: z.number().int().min(1, "Price must be greater than 0"),
-  location: z.string().min(2, "Location is required"),
+  location: z.string().min(2, "Location is required").max(200, "Location must be at most 200 characters"),
   images: z.array(z.string()).min(1, "At least one image is required").max(5),
 });
 
@@ -22,6 +22,9 @@ export async function GET(req: Request) {
   const sort = searchParams.get("sort") || "newest";
   const mine = searchParams.get("mine") === "true";
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+  const minPrice = parseInt(searchParams.get("minPrice") || "0", 10) || 0;
+  const maxPrice = parseInt(searchParams.get("maxPrice") || "0", 10) || 0;
+  const condition = searchParams.get("condition") || "";
   const limit = 12;
   const offset = (page - 1) * limit;
 
@@ -36,10 +39,26 @@ export async function GET(req: Request) {
   }
 
   if (search) {
-    conditions.push(like(products.title, `%${search}%`));
+    const escapedSearch = search.replace(/[%_]/g, "\\$&");
+    conditions.push(sql`${products.title} LIKE ${`%${escapedSearch}%`} ESCAPE '\\'`);
   }
   if (category) {
     conditions.push(eq(products.category, category));
+  }
+  if (minPrice > 0) {
+    conditions.push(gte(products.price, minPrice));
+  }
+  if (maxPrice > 0) {
+    conditions.push(lte(products.price, maxPrice));
+  }
+  if (condition) {
+    const VALID_CONDITIONS = ["new", "like_new", "good", "fair", "used"];
+    const conditions_list = condition.split(",").filter((c) => VALID_CONDITIONS.includes(c));
+    if (conditions_list.length === 1) {
+      conditions.push(sql`${products.condition} = ${conditions_list[0]}`);
+    } else if (conditions_list.length > 1) {
+      conditions.push(sql`${products.condition} IN ${sql.join(conditions_list.map((c) => sql`${c}`), sql`,`)}`);
+    }
   }
 
   const where = and(...conditions);
@@ -97,6 +116,7 @@ export async function GET(req: Request) {
   return NextResponse.json({
     products: itemsWithImages,
     total: count,
+    resultsCount: count,
     page,
     totalPages: Math.ceil(count / limit),
   });

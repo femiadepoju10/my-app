@@ -59,7 +59,7 @@ export default function SignupPage() {
           Create an account
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Join Skillbridge to buy and sell with confidence
+          Join PassOn to buy and sell with confidence
         </p>
       </div>
 

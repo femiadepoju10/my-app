@@ -4,6 +4,9 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { validateEnv } from "@/lib/env";
+
+validateEnv();
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -36,6 +39,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
+        if (!user.emailVerified) {
+          return null;
+        }
+
         return {
           id: String(user.id),
           name: user.name,
@@ -47,6 +54,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   session: {
     strategy: "jwt",
+    maxAge: 7 * 24 * 60 * 60, // 7 days
   },
   pages: {
     signIn: "/login",

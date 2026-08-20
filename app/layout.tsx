@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Skillbridge",
+  title: "PassOn",
   description:
     "Buy and sell with confidence. Your payment is protected until you confirm that you received the item as expected.",
 };

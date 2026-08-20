@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, Suspense, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
 import { formatPrice, formatCondition } from "@/lib/utils";
 import Link from "next/link";
+import ReviewSection from "@/components/products/ReviewSection";
 
 interface TransactionData {
   id: number;
@@ -66,6 +67,7 @@ const REJECTION_REASONS = [
 
 function TransactionContent() {
   const params = useParams();
+  const router = useRouter();
   const { data: session } = useSession();
   const [transaction, setTransaction] = useState<TransactionData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -102,19 +104,17 @@ function TransactionContent() {
         body: JSON.stringify({ status: newStatus, ...extra }),
       });
       if (res.ok) {
-        if (newStatus === "accepted") {
-          await fetch(`/api/transactions/${transaction.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: "payout_pending" }),
-          });
-        }
         const refresh = await fetch(`/api/transactions/${transaction.id}`);
         if (refresh.ok) {
           const refreshed = await refresh.json();
           setTransaction(refreshed.transaction);
         }
+      } else {
+        const data = await res.json();
+        alert(data.error || "Action failed");
       }
+    } catch {
+      alert("Something went wrong");
     } finally {
       setActionLoading(false);
     }
@@ -176,7 +176,13 @@ function TransactionContent() {
   };
 
   const currentStatus = statusMessages[transaction.status] || { title: transaction.status, description: "" };
-  const parsedPhotos: string[] = transaction.rejectionPhotos ? JSON.parse(transaction.rejectionPhotos) : [];
+  const parsedPhotos: string[] = (() => {
+    try {
+      return transaction.rejectionPhotos ? JSON.parse(transaction.rejectionPhotos) : [];
+    } catch {
+      return [];
+    }
+  })();
 
   return (
     <div className="mx-auto max-w-2xl py-8">
@@ -426,14 +432,39 @@ function TransactionContent() {
 
       {/* Contact Info */}
       {currentStepIndex >= 1 && transaction.buyer && transaction.seller && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="mb-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
           <h3 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-zinc-50">{isBuyer ? "Seller Contact" : "Buyer Contact"}</h3>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-zinc-500">Name</span><span>{isBuyer ? transaction.seller.name : transaction.buyer.name}</span></div>
             {isBuyer && transaction.seller.phone && <div className="flex justify-between"><span className="text-zinc-500">Phone</span><span>{transaction.seller.phone}</span></div>}
             {!isBuyer && transaction.buyer.phone && <div className="flex justify-between"><span className="text-zinc-500">Phone</span><span>{transaction.buyer.phone}</span></div>}
           </div>
+          <button
+            onClick={async () => {
+              const res = await fetch("/api/conversations", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ transactionId: transaction.id }),
+              });
+              if (res.ok) {
+                router.push("/dashboard/messages");
+              }
+            }}
+            className="mt-4 text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+          >
+            Message {isBuyer ? "Seller" : "Buyer"} →
+          </button>
         </div>
+      )}
+
+      {/* Reviews */}
+      {currentStepIndex >= 5 && transaction.product && (
+        <ReviewSection
+          productId={transaction.product.id}
+          isCompleted={transaction.status === "completed"}
+          isBuyer={isBuyer}
+          transactionId={transaction.id}
+        />
       )}
     </div>
   );

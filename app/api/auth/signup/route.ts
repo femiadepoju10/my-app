@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { sendVerificationEmail } from "@/lib/email";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 const signupSchema = z
   .object({
@@ -20,6 +23,16 @@ const signupSchema = z
 
 export async function POST(req: Request) {
   try {
+    const ip = getClientIp(req);
+    const { allowed, retryAfterMs } = checkRateLimit(`signup:${ip}`, 5, 15 * 60 * 1000);
+
+    if (!allowed) {
+      return NextResponse.json(
+        { error: `Too many attempts. Try again in ${Math.ceil(retryAfterMs / 60000)} minutes.` },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
     const validated = signupSchema.safeParse(body);
 
@@ -46,16 +59,23 @@ export async function POST(req: Request) {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+    const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-    await db.insert(users).values({
+    const [newUser] = await db.insert(users).values({
       name,
       email,
       phone,
       passwordHash,
-    });
+      verificationToken,
+      verificationTokenExpiry,
+    }).returning();
+
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+    sendVerificationEmail(email, name, verificationToken, baseUrl).catch(() => {});
 
     return NextResponse.json(
-      { message: "Account created successfully" },
+      { message: "Account created successfully", userId: newUser.id },
       { status: 201 }
     );
   } catch {

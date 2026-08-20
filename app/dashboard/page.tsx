@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { products, transactions } from "@/lib/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, notInArray } from "drizzle-orm";
 import Link from "next/link";
 
 export default async function DashboardPage() {
@@ -22,7 +22,12 @@ export default async function DashboardPage() {
   const [{ saleCount }] = await db
     .select({ saleCount: sql<number>`count(*)` })
     .from(transactions)
-    .where(eq(transactions.sellerId, userId));
+    .where(
+      and(
+        eq(transactions.sellerId, userId),
+        notInArray(transactions.status, ["payment_pending", "rejected", "refund_completed"])
+      )
+    );
 
   return (
     <div className="grid gap-6 sm:grid-cols-3">

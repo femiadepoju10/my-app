@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { transactions, payments, products } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { verifyWebhookSignature, verifyTransaction } from "@/lib/paystack";
+import { sendTransactionEmail } from "@/lib/email";
 
 export async function POST(req: Request) {
   const body = await req.text();
@@ -48,6 +49,14 @@ export async function POST(req: Request) {
         return NextResponse.json({ received: true });
       }
 
+      const verifiedAmount = (verificationData as Record<string, unknown>)?.amount as number | undefined;
+      if (verifiedAmount && verifiedAmount !== amount) {
+        return NextResponse.json(
+          { error: "Amount mismatch" },
+          { status: 400 }
+        );
+      }
+
       const transactionIdFromMeta =
         event.data?.metadata?.transaction_id ||
         (verificationData.metadata as Record<string, unknown>)
@@ -62,55 +71,56 @@ export async function POST(req: Request) {
 
       const txId = Number(transactionIdFromMeta);
 
-      const transaction = await db
-        .select()
-        .from(transactions)
-        .where(eq(transactions.id, txId))
-        .get();
+      await db.transaction(async (tx) => {
+        const transaction = await tx
+          .select()
+          .from(transactions)
+          .where(eq(transactions.id, txId))
+          .get();
 
-      if (!transaction) {
-        return NextResponse.json(
-          { error: "Transaction not found" },
-          { status: 404 }
-        );
-      }
+        if (!transaction) {
+          return;
+        }
 
-      if (transaction.status !== "payment_pending") {
-        return NextResponse.json({ received: true });
-      }
+        if (transaction.status !== "payment_pending") {
+          return;
+        }
 
-      if (existingPayment) {
-        await db
-          .update(payments)
-          .set({
+        if (existingPayment) {
+          await tx
+            .update(payments)
+            .set({
+              status: "successful",
+              gatewayResponse: JSON.stringify(verificationData),
+              paidAt: paid_at || new Date().toISOString(),
+            })
+            .where(eq(payments.paystackRef, reference));
+        } else {
+          await tx.insert(payments).values({
+            transactionId: txId,
+            paystackRef: reference,
+            amount: verifiedAmount || amount,
             status: "successful",
             gatewayResponse: JSON.stringify(verificationData),
             paidAt: paid_at || new Date().toISOString(),
+          });
+        }
+
+        await tx
+          .update(transactions)
+          .set({
+            status: "payment_confirmed",
+            updatedAt: new Date().toISOString(),
           })
-          .where(eq(payments.paystackRef, reference));
-      } else {
-        await db.insert(payments).values({
-          transactionId: txId,
-          paystackRef: reference,
-          amount: amount as number,
-          status: "successful",
-          gatewayResponse: JSON.stringify(verificationData),
-          paidAt: paid_at || new Date().toISOString(),
-        });
-      }
+          .where(eq(transactions.id, txId));
 
-      await db
-        .update(transactions)
-        .set({
-          status: "payment_confirmed",
-          updatedAt: new Date().toISOString(),
-        })
-        .where(eq(transactions.id, txId));
+        await tx
+          .update(products)
+          .set({ status: "reserved", updatedAt: new Date().toISOString() })
+          .where(eq(products.id, transaction.productId));
+      });
 
-      await db
-        .update(products)
-        .set({ status: "reserved", updatedAt: new Date().toISOString() })
-        .where(eq(products.id, transaction.productId));
+      sendTransactionEmail(txId, "payment_confirmed").catch(() => {});
 
       return NextResponse.json({ received: true });
     } catch (error) {
