@@ -7,6 +7,12 @@ import Image from "next/image";
 import { formatPrice, formatCondition } from "@/lib/utils";
 import Link from "next/link";
 import ReviewSection from "@/components/products/ReviewSection";
+import {
+  ArrowLeft, Package, Clock, CheckCircle, AlertTriangle,
+  Truck, Search, ThumbsUp, ThumbsDown, CreditCard, Banknote,
+  ShieldCheck, MessageSquare, Camera, X, Loader2, ChevronRight,
+} from "lucide-react";
+import { useToast } from "@/components/ui/Toast";
 
 interface TransactionData {
   id: number;
@@ -69,6 +75,7 @@ function TransactionContent() {
   const params = useParams();
   const router = useRouter();
   const { data: session } = useSession();
+  const { addToast } = useToast();
   const [transaction, setTransaction] = useState<TransactionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -111,10 +118,10 @@ function TransactionContent() {
         }
       } else {
         const data = await res.json();
-        alert(data.error || "Action failed");
+        addToast(data.error || "Action failed", "error");
       }
     } catch {
-      alert("Something went wrong");
+      addToast("Something went wrong", "error");
     } finally {
       setActionLoading(false);
     }
@@ -147,7 +154,7 @@ function TransactionContent() {
   }
 
   if (loading) {
-    return <div className="flex min-h-[60vh] items-center justify-center"><p className="text-zinc-500">Loading...</p></div>;
+    return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-indigo-600" /></div>;
   }
 
   if (!transaction) {
@@ -185,30 +192,40 @@ function TransactionContent() {
   })();
 
   return (
-    <div className="mx-auto max-w-2xl py-8">
-      <Link href="/dashboard" className="mb-6 inline-block text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50">
-        &larr; Back to Dashboard
+    <div className="mx-auto max-w-2xl py-8 animate-fade-in">
+      <Link href="/dashboard" className="mb-6 inline-flex items-center gap-1.5 text-sm text-zinc-500 transition-colors hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400">
+        <ArrowLeft className="h-4 w-4" />
+        Back to Dashboard
       </Link>
 
-      <h1 className="mb-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50">Transaction #{transaction.id}</h1>
-      <p className="mb-8 text-sm text-zinc-500">{new Date(transaction.createdAt).toLocaleString()}</p>
+      <div className="mb-8 flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-900/30">
+          <Package className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Transaction #{transaction.id}</h1>
+          <p className="text-sm text-zinc-500">{new Date(transaction.createdAt).toLocaleString()}</p>
+        </div>
+      </div>
 
       {/* Status Card */}
-      <div className="mb-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
-        <h2 className="mb-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">{currentStatus.title}</h2>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">{currentStatus.description}</p>
+      <div className="mb-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4">
+          <h2 className="text-lg font-semibold text-white">{currentStatus.title}</h2>
+          <p className="text-sm text-white/80">{currentStatus.description}</p>
+        </div>
 
-        <div className="mt-6">
+        <div className="p-6">
           {STATUS_STEPS.map((step, i) => {
             const isCompleted = i <= currentStepIndex;
             const isCurrent = i === currentStepIndex;
             return (
               <div key={step.key} className="flex items-start gap-3">
                 <div className="flex flex-col items-center">
-                  <div className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${isCompleted ? "bg-emerald-600 text-white" : "bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"} ${isCurrent ? "ring-2 ring-emerald-600 ring-offset-2 dark:ring-offset-zinc-950" : ""}`}>
-                    {isCompleted ? "✓" : i + 1}
+                  <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium transition-colors ${isCompleted ? "bg-indigo-600 text-white" : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"} ${isCurrent ? "ring-2 ring-indigo-600 ring-offset-2 dark:ring-offset-zinc-950" : ""}`}>
+                    {isCompleted ? <CheckCircle className="h-4 w-4" /> : i + 1}
                   </div>
-                  {i < STATUS_STEPS.length - 1 && <div className={`h-8 w-0.5 ${isCompleted ? "bg-emerald-600" : "bg-zinc-200 dark:bg-zinc-800"}`} />}
+                  {i < STATUS_STEPS.length - 1 && <div className={`h-8 w-0.5 transition-colors ${isCompleted ? "bg-indigo-600" : "bg-zinc-200 dark:bg-zinc-800"}`} />}
                 </div>
                 <span className={`pt-0.5 text-sm ${isCurrent ? "font-semibold text-zinc-900 dark:text-zinc-50" : isCompleted ? "text-zinc-600 dark:text-zinc-400" : "text-zinc-400 dark:text-zinc-600"}`}>
                   {step.label}
@@ -222,54 +239,63 @@ function TransactionContent() {
       {/* Action Buttons */}
       <div className="mb-8 space-y-3">
         {transaction.status === "seller_contacted" && isSeller && (
-          <button onClick={() => handleStatusChange("item_delivered")} disabled={actionLoading} className="w-full rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">
+          <button onClick={() => handleStatusChange("item_delivered")} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:bg-indigo-700 disabled:opacity-50">
+            {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
             {actionLoading ? "Updating..." : "Mark as Delivered"}
           </button>
         )}
 
         {transaction.status === "item_delivered" && isBuyer && (
-          <button onClick={() => handleStatusChange("inspection_pending")} disabled={actionLoading} className="w-full rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">
+          <button onClick={() => handleStatusChange("inspection_pending")} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:bg-indigo-700 disabled:opacity-50">
+            {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
             {actionLoading ? "Updating..." : "I've Received the Item"}
           </button>
         )}
 
         {transaction.status === "inspection_pending" && isBuyer && (
           <>
-            <button onClick={() => setShowAcceptModal(true)} disabled={actionLoading} className="w-full rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">
+            <button onClick={() => setShowAcceptModal(true)} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:bg-emerald-700 disabled:opacity-50">
+              <ThumbsUp className="h-4 w-4" />
               Accept Item
             </button>
-            <button onClick={() => setShowRejectForm(true)} disabled={actionLoading} className="w-full rounded-lg border border-red-300 px-4 py-3 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20">
+            <button onClick={() => setShowRejectForm(true)} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-300 px-4 py-3 text-sm font-semibold text-red-600 transition-all hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20">
+              <ThumbsDown className="h-4 w-4" />
               Report Problem
             </button>
           </>
         )}
 
         {transaction.status === "rejected" && (isSeller || isAdmin) && (
-          <button onClick={() => handleStatusChange("disputed")} disabled={actionLoading} className="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+          <button onClick={() => handleStatusChange("disputed")} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 px-4 py-3 text-sm font-semibold text-zinc-700 transition-all hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+            {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
             {actionLoading ? "Updating..." : "Escalate to Dispute"}
           </button>
         )}
 
         {(transaction.status === "rejected" || transaction.status === "disputed") && isAdmin && (
-          <button onClick={() => handleStatusChange("refund_pending")} disabled={actionLoading} className="w-full rounded-lg bg-amber-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-amber-700 disabled:opacity-50">
+          <button onClick={() => handleStatusChange("refund_pending")} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-amber-500/25 transition-all hover:bg-amber-600 disabled:opacity-50">
+            {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
             {actionLoading ? "Updating..." : "Approve Refund"}
           </button>
         )}
 
         {transaction.status === "refund_pending" && isAdmin && (
-          <button onClick={() => handleStatusChange("refund_completed")} disabled={actionLoading} className="w-full rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">
+          <button onClick={() => handleStatusChange("refund_completed")} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:bg-emerald-700 disabled:opacity-50">
+            {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
             {actionLoading ? "Updating..." : "Process Refund"}
           </button>
         )}
 
         {transaction.status === "payout_pending" && isAdmin && (
-          <button onClick={() => handleStatusChange("payout_completed")} disabled={actionLoading} className="w-full rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">
+          <button onClick={() => handleStatusChange("payout_completed")} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:bg-emerald-700 disabled:opacity-50">
+            {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
             {actionLoading ? "Updating..." : "Mark Payout Complete"}
           </button>
         )}
 
         {transaction.status === "payout_completed" && isAdmin && (
-          <button onClick={() => handleStatusChange("completed")} disabled={actionLoading} className="w-full rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">
+          <button onClick={() => handleStatusChange("completed")} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:bg-emerald-700 disabled:opacity-50">
+            {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
             {actionLoading ? "Updating..." : "Complete Transaction"}
           </button>
         )}
@@ -277,87 +303,121 @@ function TransactionContent() {
 
       {/* Accept Modal */}
       {showAcceptModal && (
-        <div className="mb-8 rounded-lg border border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-800 dark:bg-emerald-900/20">
-          <h3 className="mb-2 text-lg font-semibold text-emerald-900 dark:text-emerald-100">Confirm Acceptance</h3>
-          <p className="mb-4 text-sm text-emerald-700 dark:text-emerald-300">
-            Are you sure you want to accept this item? This will release {formatPrice(transaction.itemPrice)} to the seller.
-          </p>
-          <div className="flex gap-3">
-            <button onClick={() => { handleStatusChange("accepted"); setShowAcceptModal(false); }} disabled={actionLoading} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
-              {actionLoading ? "Processing..." : "Yes, Accept"}
-            </button>
-            <button onClick={() => setShowAcceptModal(false)} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300">
-              Cancel
-            </button>
+        <div className="mb-8 overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20">
+          <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 px-6 py-4">
+            <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+              <ShieldCheck className="h-5 w-5" />
+              Confirm Acceptance
+            </h3>
+          </div>
+          <div className="p-6">
+            <p className="mb-4 text-sm text-emerald-700 dark:text-emerald-300">
+              Are you sure you want to accept this item? This will release {formatPrice(transaction.itemPrice)} to the seller.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => { handleStatusChange("accepted"); setShowAcceptModal(false); }} disabled={actionLoading} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-emerald-700 disabled:opacity-50">
+                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                {actionLoading ? "Processing..." : "Yes, Accept"}
+              </button>
+              <button onClick={() => setShowAcceptModal(false)} className="rounded-xl border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300">
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* Reject Form */}
       {showRejectForm && (
-        <div className="mb-8 rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800 dark:bg-red-900/20">
-          <h3 className="mb-4 text-lg font-semibold text-red-900 dark:text-red-100">Report a Problem</h3>
-
-          <div className="mb-4">
-            <label className="mb-1 block text-sm font-medium text-red-800 dark:text-red-200">Reason</label>
-            <select value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="w-full rounded-lg border border-red-300 px-3 py-2 text-sm text-red-900 focus:border-red-500 focus:outline-none dark:border-red-700 dark:bg-red-900/40 dark:text-red-100">
-              <option value="">Select a reason...</option>
-              {REJECTION_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
+        <div className="mb-8 overflow-hidden rounded-2xl border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
+          <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4">
+            <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
+              <AlertTriangle className="h-5 w-5" />
+              Report a Problem
+            </h3>
           </div>
-
-          <div className="mb-4">
-            <label className="mb-1 block text-sm font-medium text-red-800 dark:text-red-200">Photos (optional, max 3)</label>
-            <div className="flex flex-wrap gap-2">
-              {rejectPhotos.map((url, i) => (
-                <div key={i} className="relative h-16 w-16">
-                  <Image src={url} alt={`Evidence ${i + 1}`} fill className="rounded-lg object-cover" sizes="64px" />
-                  <button onClick={() => setRejectPhotos((prev) => prev.filter((_, j) => j !== i))} className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs text-white">×</button>
-                </div>
-              ))}
-              {rejectPhotos.length < 3 && (
-                <label className="flex h-16 w-16 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-red-300 text-red-400 hover:border-red-400 dark:border-red-700">
-                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
-                  {uploadingPhoto ? "..." : "+"}
-                </label>
-              )}
+          <div className="p-6">
+            <div className="mb-4">
+              <label className="mb-1.5 block text-sm font-medium text-red-800 dark:text-red-200">Reason</label>
+              <select value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="w-full rounded-xl border border-red-300 px-3 py-2.5 text-sm text-red-900 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-red-700 dark:bg-red-900/40 dark:text-red-100">
+                <option value="">Select a reason...</option>
+                {REJECTION_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
             </div>
-          </div>
 
-          <div className="flex gap-3">
-            <button onClick={handleReject} disabled={!rejectReason || actionLoading} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50">
-              {actionLoading ? "Submitting..." : "Submit Report"}
-            </button>
-            <button onClick={() => setShowRejectForm(false)} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300">
-              Cancel
-            </button>
+            <div className="mb-4">
+              <label className="mb-1.5 block text-sm font-medium text-red-800 dark:text-red-200">
+                <span className="flex items-center gap-1.5">
+                  <Camera className="h-3.5 w-3.5" />
+                  Photos (optional, max 3)
+                </span>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {rejectPhotos.map((url, i) => (
+                  <div key={i} className="relative h-16 w-16">
+                    <Image src={url} alt={`Evidence ${i + 1}`} fill className="rounded-xl object-cover" sizes="64px" />
+                    <button onClick={() => setRejectPhotos((prev) => prev.filter((_, j) => j !== i))} className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs text-white shadow-sm">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                {rejectPhotos.length < 3 && (
+                  <label className="flex h-16 w-16 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-red-300 text-red-400 transition-colors hover:border-red-400 hover:bg-red-100/50 dark:border-red-700">
+                    <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+                    {uploadingPhoto ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                  </label>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={handleReject} disabled={!rejectReason || actionLoading} className="flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-red-700 disabled:opacity-50">
+                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
+                {actionLoading ? "Submitting..." : "Submit Report"}
+              </button>
+              <button onClick={() => setShowRejectForm(false)} className="rounded-xl border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300">
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* Rejection Details */}
       {transaction.status === "rejected" && transaction.rejectionReason && (
-        <div className="mb-8 rounded-lg border border-red-200 bg-white p-6 dark:border-red-800 dark:bg-zinc-950">
-          <h3 className="mb-3 text-sm font-semibold text-red-700 dark:text-red-400">Rejection Details</h3>
-          <p className="mb-2 text-sm text-zinc-700 dark:text-zinc-300"><strong>Reason:</strong> {transaction.rejectionReason}</p>
-          {parsedPhotos.length > 0 && (
-            <div className="mt-3 flex gap-2">
-              {parsedPhotos.map((url, i) => (
-                <Image key={i} src={url} alt={`Evidence ${i + 1}`} width={80} height={80} className="h-20 w-20 rounded-lg object-cover" />
-              ))}
-            </div>
-          )}
+        <div className="mb-8 overflow-hidden rounded-2xl border border-red-200 bg-white dark:border-red-800 dark:bg-zinc-950">
+          <div className="border-b border-red-100 bg-red-50 px-6 py-3 dark:border-red-900 dark:bg-red-900/10">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-red-700 dark:text-red-400">
+              <AlertTriangle className="h-4 w-4" />
+              Rejection Details
+            </h3>
+          </div>
+          <div className="p-6">
+            <p className="mb-2 text-sm text-zinc-700 dark:text-zinc-300"><strong>Reason:</strong> {transaction.rejectionReason}</p>
+            {parsedPhotos.length > 0 && (
+              <div className="mt-3 flex gap-2">
+                {parsedPhotos.map((url, i) => (
+                  <Image key={i} src={url} alt={`Evidence ${i + 1}`} width={80} height={80} className="h-20 w-20 rounded-xl object-cover" />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {/* Payout Details */}
       {(transaction.status === "payout_pending" || transaction.status === "payout_completed" || transaction.status === "completed") && (
-        <div className="mb-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
-          <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Seller Payout</h3>
-          <div className="space-y-2">
+        <div className="mb-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="border-b border-zinc-100 bg-zinc-50 px-6 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              <Banknote className="h-4 w-4" />
+              Seller Payout
+            </h3>
+          </div>
+          <div className="p-6 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-zinc-500">Seller receives</span>
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatPrice(transaction.itemPrice)}</span>
+              <span className="font-semibold text-indigo-600 dark:text-indigo-400">{formatPrice(transaction.itemPrice)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-zinc-500">Payout status</span>
@@ -375,9 +435,14 @@ function TransactionContent() {
 
       {/* Refund Details */}
       {(transaction.status === "refund_pending" || transaction.status === "refund_completed") && (
-        <div className="mb-8 rounded-lg border border-amber-200 bg-white p-6 dark:border-amber-800 dark:bg-zinc-950">
-          <h3 className="mb-3 text-sm font-semibold text-amber-700 dark:text-amber-400">Refund</h3>
-          <div className="space-y-2">
+        <div className="mb-8 overflow-hidden rounded-2xl border border-amber-200 bg-white dark:border-amber-800 dark:bg-zinc-950">
+          <div className="border-b border-amber-100 bg-amber-50 px-6 py-3 dark:border-amber-900 dark:bg-amber-900/10">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-400">
+              <Banknote className="h-4 w-4" />
+              Refund
+            </h3>
+          </div>
+          <div className="p-6 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-zinc-500">Refund amount</span>
               <span className="font-semibold text-amber-600 dark:text-amber-400">{formatPrice(transaction.refund?.amount || transaction.totalAmount)}</span>
@@ -398,31 +463,44 @@ function TransactionContent() {
 
       {/* Product Info */}
       {transaction.product && (
-        <div className="mb-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
-          <h3 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Product Details</h3>
-          <div className="flex gap-4">
-            {transaction.product.images[0] && (
-              <Image src={transaction.product.images[0].imageUrl} alt={transaction.product.title} width={80} height={80} className="h-20 w-20 rounded-lg object-cover" />
-            )}
-            <div>
-              <Link href={`/products/${transaction.product.id}`} className="text-sm font-semibold text-zinc-900 hover:underline dark:text-zinc-50">
-                {transaction.product.title}
-              </Link>
-              <p className="mt-1 text-sm text-zinc-500">{formatCondition(transaction.product.condition)}</p>
-              <p className="text-sm text-zinc-500">{transaction.product.location}</p>
+        <div className="mb-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="border-b border-zinc-100 bg-zinc-50 px-6 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              <Package className="h-4 w-4" />
+              Product Details
+            </h3>
+          </div>
+          <div className="p-6">
+            <div className="flex gap-4">
+              {transaction.product.images[0] && (
+                <Image src={transaction.product.images[0].imageUrl} alt={transaction.product.title} width={80} height={80} className="h-20 w-20 rounded-xl object-cover" />
+              )}
+              <div>
+                <Link href={`/products/${transaction.product.id}`} className="flex items-center gap-1 text-sm font-semibold text-indigo-600 hover:underline dark:text-indigo-400">
+                  {transaction.product.title}
+                  <ChevronRight className="h-3 w-3" />
+                </Link>
+                <p className="mt-1 text-sm text-zinc-500">{formatCondition(transaction.product.condition)}</p>
+                <p className="text-sm text-zinc-500">{transaction.product.location}</p>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {/* Payment Info */}
-      <div className="mb-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
-        <h3 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Payment Details</h3>
-        <div className="space-y-2">
+      <div className="mb-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="border-b border-zinc-100 bg-zinc-50 px-6 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            <CreditCard className="h-4 w-4" />
+            Payment Details
+          </h3>
+        </div>
+        <div className="p-6 space-y-2">
           <div className="flex justify-between text-sm"><span className="text-zinc-500">Item price</span><span>{formatPrice(transaction.itemPrice)}</span></div>
           <div className="flex justify-between text-sm"><span className="text-zinc-500">Service fee (10%)</span><span>{formatPrice(transaction.serviceFee)}</span></div>
-          <div className="border-t border-zinc-200 pt-2 dark:border-zinc-800">
-            <div className="flex justify-between font-semibold"><span>Total</span><span className="text-emerald-600 dark:text-emerald-400">{formatPrice(transaction.totalAmount)}</span></div>
+          <div className="border-t border-zinc-200 pt-2 dark:border-zinc-700">
+            <div className="flex justify-between font-semibold"><span>Total</span><span className="text-indigo-600 dark:text-indigo-400">{formatPrice(transaction.totalAmount)}</span></div>
           </div>
           {transaction.payment && (
             <div className="mt-2 flex justify-between text-sm"><span className="text-zinc-500">Payment status</span><span className="font-medium capitalize">{transaction.payment.status}</span></div>
@@ -432,28 +510,36 @@ function TransactionContent() {
 
       {/* Contact Info */}
       {currentStepIndex >= 1 && transaction.buyer && transaction.seller && (
-        <div className="mb-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
-          <h3 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-zinc-50">{isBuyer ? "Seller Contact" : "Buyer Contact"}</h3>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-zinc-500">Name</span><span>{isBuyer ? transaction.seller.name : transaction.buyer.name}</span></div>
-            {isBuyer && transaction.seller.phone && <div className="flex justify-between"><span className="text-zinc-500">Phone</span><span>{transaction.seller.phone}</span></div>}
-            {!isBuyer && transaction.buyer.phone && <div className="flex justify-between"><span className="text-zinc-500">Phone</span><span>{transaction.buyer.phone}</span></div>}
+        <div className="mb-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="border-b border-zinc-100 bg-zinc-50 px-6 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              <MessageSquare className="h-4 w-4" />
+              {isBuyer ? "Seller Contact" : "Buyer Contact"}
+            </h3>
           </div>
-          <button
-            onClick={async () => {
-              const res = await fetch("/api/conversations", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ transactionId: transaction.id }),
-              });
-              if (res.ok) {
-                router.push("/dashboard/messages");
-              }
-            }}
-            className="mt-4 text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400"
-          >
-            Message {isBuyer ? "Seller" : "Buyer"} →
-          </button>
+          <div className="p-6">
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-zinc-500">Name</span><span>{isBuyer ? transaction.seller.name : transaction.buyer.name}</span></div>
+              {isBuyer && transaction.seller.phone && <div className="flex justify-between"><span className="text-zinc-500">Phone</span><span>{transaction.seller.phone}</span></div>}
+              {!isBuyer && transaction.buyer.phone && <div className="flex justify-between"><span className="text-zinc-500">Phone</span><span>{transaction.buyer.phone}</span></div>}
+            </div>
+            <button
+              onClick={async () => {
+                const res = await fetch("/api/conversations", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ transactionId: transaction.id }),
+                });
+                if (res.ok) {
+                  router.push("/dashboard/messages");
+                }
+              }}
+              className="mt-4 flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+            >
+              <MessageSquare className="h-4 w-4" />
+              Message {isBuyer ? "Seller" : "Buyer"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -472,7 +558,7 @@ function TransactionContent() {
 
 export default function TransactionPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center"><p className="text-zinc-500">Loading...</p></div>}>
+    <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-indigo-600" /></div>}>
       <TransactionContent />
     </Suspense>
   );

@@ -3,15 +3,20 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CATEGORIES, CONDITIONS } from "@/lib/utils";
+import { Tag, Camera, Upload, X, Loader2, Info } from "lucide-react";
+import { useToast } from "@/components/ui/Toast";
+import { formatPrice } from "@/lib/utils";
 
 export default function SellPage() {
   const router = useRouter();
+  const { addToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [serverError, setServerError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [price, setPrice] = useState(0);
 
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
@@ -110,24 +115,34 @@ export default function SellPage() {
   }
 
   const inputClass =
-    "w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50";
+    "w-full rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50";
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <h1 className="mb-8 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-        Sell an Item
-      </h1>
+    <div className="mx-auto max-w-2xl animate-fade-in">
+      <div className="mb-8 flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-900/30">
+          <Tag className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+            Sell an Item
+          </h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">List your product on the marketplace</p>
+        </div>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {serverError && (
-          <div className="rounded-md bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+          <div className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+            <span className="text-red-500">!</span>
             {serverError}
           </div>
         )}
 
         {/* Images */}
         <div>
-          <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label className="mb-2 flex items-center gap-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <Camera className="h-4 w-4" />
             Product Images (up to 5)
           </label>
           <div className="flex flex-wrap gap-3">
@@ -137,20 +152,21 @@ export default function SellPage() {
                 <img
                   src={url}
                   alt={`Upload ${i + 1}`}
-                  className="h-full w-full rounded-lg object-cover"
+                  className="h-full w-full rounded-xl object-cover"
                 />
                 <button
                   type="button"
                   onClick={() => removeImage(i)}
-                  className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white"
+                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white shadow-sm transition-colors hover:bg-red-600"
                 >
-                  x
+                  <X className="h-3 w-3" />
                 </button>
               </div>
             ))}
             {images.length < 5 && (
-              <label className="flex h-24 w-24 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-zinc-300 text-xs text-zinc-400 transition-colors hover:border-zinc-400 hover:text-zinc-500 dark:border-zinc-700 dark:hover:border-zinc-600">
-                {uploading ? "Uploading..." : "+ Add"}
+              <label className="flex h-24 w-24 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-300 text-xs text-zinc-400 transition-colors hover:border-indigo-400 hover:text-indigo-500 dark:border-zinc-700 dark:hover:border-indigo-600">
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                <span className="mt-1">{uploading ? "Uploading..." : "Add"}</span>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -276,11 +292,45 @@ export default function SellPage() {
               type="number"
               min="1"
               required
+              value={price || ""}
+              onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
               className={inputClass}
               placeholder="e.g. 500000"
             />
             {errors.price && (
               <p className="mt-1 text-xs text-red-600">{errors.price[0]}</p>
+            )}
+
+            {/* Live Fee Calculator */}
+            {price > 0 && (
+              <div className="mt-3 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700">
+                <div className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 px-3 py-1.5">
+                  <Info className="h-3 w-3 text-white/80" />
+                  <p className="text-xs font-medium text-white/90">Pricing Preview</p>
+                </div>
+                <div className="bg-zinc-50 p-3 dark:bg-zinc-900">
+                  <div className="flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                    <span>Your listing price</span>
+                    <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                      {formatPrice(price)}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                    <span>Platform fee (10%)</span>
+                    <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                      {formatPrice(Math.round(price * 0.1))}
+                    </span>
+                  </div>
+                  <div className="mt-2 border-t border-zinc-200 pt-2 dark:border-zinc-700">
+                    <div className="flex justify-between text-xs font-bold text-zinc-900 dark:text-zinc-50">
+                      <span>Buyer pays</span>
+                      <span className="text-indigo-600 dark:text-indigo-400">
+                        {formatPrice(price + Math.round(price * 0.1))}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
 
@@ -309,9 +359,14 @@ export default function SellPage() {
 
         <button
           type="submit"
-          disabled={loading || uploading}
-          className="w-full rounded-lg bg-zinc-900 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          disabled={loading}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:bg-indigo-700 hover:shadow-xl disabled:opacity-50"
         >
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Tag className="h-4 w-4" />
+          )}
           {loading ? "Publishing..." : "Publish Listing"}
         </button>
       </form>

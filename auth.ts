@@ -60,6 +60,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/login",
   },
   callbacks: {
+    async authorized({ auth, request }) {
+      const isLoggedIn = !!auth;
+      const { pathname } = request.nextUrl;
+
+      const isProtected =
+        pathname.startsWith("/dashboard") ||
+        pathname.startsWith("/checkout") ||
+        pathname.startsWith("/transaction") ||
+        pathname.startsWith("/products/sell") ||
+        pathname.startsWith("/admin");
+
+      if (isProtected && !isLoggedIn) {
+        return false;
+      }
+
+      if (pathname.startsWith("/admin") && auth?.user?.role !== "admin") {
+        return false;
+      }
+
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;

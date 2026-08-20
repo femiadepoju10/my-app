@@ -3,7 +3,10 @@
 import { useState, useEffect, Suspense, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import ProductCard from "@/components/products/ProductCard";
+import { ProductCardSkeleton } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
 import { CATEGORIES, CONDITIONS } from "@/lib/utils";
+import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, Tag } from "lucide-react";
 
 interface ProductImage {
   imageUrl: string;
@@ -57,6 +60,7 @@ function MarketplaceContent() {
   }, [search, category, sort, page, minPrice, maxPrice, condition, router]);
 
   useEffect(() => {
+    let cancelled = false;
     async function fetchProducts() {
       setLoading(true);
       const params = new URLSearchParams();
@@ -69,6 +73,7 @@ function MarketplaceContent() {
       if (condition) params.set("condition", condition);
 
       const res = await fetch(`/api/products?${params}`);
+      if (cancelled) return;
       if (res.ok) {
         const data: ProductsResponse = await res.json();
         setProducts(data.products || []);
@@ -79,6 +84,7 @@ function MarketplaceContent() {
       updateURL();
     }
     fetchProducts();
+    return () => { cancelled = true; };
   }, [search, category, sort, page, minPrice, maxPrice, condition, updateURL]);
 
   function handleSearch(e: React.FormEvent) {
@@ -102,35 +108,57 @@ function MarketplaceContent() {
 
   const hasActiveFilters = search || category || sort !== "newest" || minPrice || maxPrice || condition;
 
-  return (
-    <div>
-      <h1 className="mb-6 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-        Marketplace
-      </h1>
+  const activeFilters: { label: string; onRemove: () => void }[] = [];
+  if (search) activeFilters.push({ label: `"${search}"`, onRemove: () => setSearch("") });
+  if (category) activeFilters.push({ label: category, onRemove: () => setCategory("") });
+  if (condition) activeFilters.push({ label: CONDITIONS.find((c) => c.value === condition)?.label || condition, onRemove: () => setCondition("") });
+  if (minPrice) activeFilters.push({ label: `Min ₦${minPrice}`, onRemove: () => setMinPrice("") });
+  if (maxPrice) activeFilters.push({ label: `Max ₦${maxPrice}`, onRemove: () => setMaxPrice("") });
 
-      {/* Filters */}
-      <div className="mb-8 space-y-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-        <form onSubmit={handleSearch} className="flex gap-3">
+  const selectClass =
+    "rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-700 transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300";
+
+  return (
+    <div className="animate-fade-in">
+      <div className="mb-6 flex items-center gap-3">
+        <Tag className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+          Marketplace
+        </h1>
+      </div>
+
+      {/* Search */}
+      <form onSubmit={handleSearch} className="mb-6 flex gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search products..."
-            className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+            className="w-full rounded-xl border border-zinc-200 bg-white py-2.5 pl-10 pr-3 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
           />
-          <button
-            type="submit"
-            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
-          >
-            Search
-          </button>
-        </form>
+        </div>
+        <button
+          type="submit"
+          className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+        >
+          <Search className="h-4 w-4" />
+          Search
+        </button>
+      </form>
 
-        <div className="flex flex-wrap gap-3">
+      {/* Filters */}
+      <div className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <SlidersHorizontal className="h-4 w-4" />
+          Filters
+        </div>
+        <div className="mt-3 flex flex-wrap gap-3">
           <select
             value={category}
             onChange={(e) => { setCategory(e.target.value); setPage(1); }}
-            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+            className={selectClass}
           >
             <option value="">All Categories</option>
             {CATEGORIES.map((cat) => (
@@ -141,7 +169,7 @@ function MarketplaceContent() {
           <select
             value={condition}
             onChange={(e) => { setCondition(e.target.value); setPage(1); }}
-            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+            className={selectClass}
           >
             <option value="">All Conditions</option>
             {CONDITIONS.map((c) => (
@@ -152,48 +180,57 @@ function MarketplaceContent() {
           <select
             value={sort}
             onChange={(e) => { setSort(e.target.value); setPage(1); }}
-            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+            className={selectClass}
           >
             <option value="newest">Newest</option>
             <option value="price_low">Price: Low to High</option>
             <option value="price_high">Price: High to Low</option>
           </select>
-        </div>
 
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400">Min Price (₦)</label>
+          <div className="flex items-center gap-2">
             <input
               type="number"
               value={minPrice}
               onChange={(e) => setMinPrice(e.target.value)}
               onBlur={handlePriceFilter}
-              placeholder="0"
+              placeholder="Min"
               min="0"
-              className="w-28 rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+              className="w-24 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
             />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400">Max Price (₦)</label>
+            <span className="text-zinc-400">-</span>
             <input
               type="number"
               value={maxPrice}
               onChange={(e) => setMaxPrice(e.target.value)}
               onBlur={handlePriceFilter}
-              placeholder="Any"
+              placeholder="Max"
               min="0"
-              className="w-28 rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+              className="w-24 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
             />
           </div>
-          {hasActiveFilters && (
+        </div>
+
+        {/* Active filter chips */}
+        {activeFilters.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {activeFilters.map((f, i) => (
+              <button
+                key={i}
+                onClick={f.onRemove}
+                className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400"
+              >
+                {f.label}
+                <X className="h-3 w-3" />
+              </button>
+            ))}
             <button
               onClick={clearFilters}
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              className="text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
             >
               Clear all
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Results count */}
@@ -205,11 +242,25 @@ function MarketplaceContent() {
 
       {/* Products Grid */}
       {loading ? (
-        <div className="py-20 text-center text-zinc-500">Loading...</div>
-      ) : products.length === 0 ? (
-        <div className="py-20 text-center text-zinc-500">
-          No products found.
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <ProductCardSkeleton key={i} />
+          ))}
         </div>
+      ) : products.length === 0 ? (
+        <EmptyState
+          icon="search"
+          title="No products found"
+          description="Try adjusting your filters or search terms to find what you're looking for."
+          action={
+            <button
+              onClick={clearFilters}
+              className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+            >
+              Clear filters
+            </button>
+          }
+        />
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -224,19 +275,21 @@ function MarketplaceContent() {
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                className="flex items-center gap-1 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
+                <ChevronLeft className="h-4 w-4" />
                 Previous
               </button>
-              <span className="px-3 py-2 text-sm text-zinc-600 dark:text-zinc-400">
+              <span className="px-4 py-2 text-sm text-zinc-500 dark:text-zinc-400">
                 Page {page} of {totalPages}
               </span>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                className="flex items-center gap-1 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 Next
+                <ChevronRight className="h-4 w-4" />
               </button>
             </div>
           )}
@@ -248,7 +301,13 @@ function MarketplaceContent() {
 
 export default function MarketplacePage() {
   return (
-    <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center"><p className="text-zinc-500">Loading...</p></div>}>
+    <Suspense
+      fallback={
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+        </div>
+      }
+    >
       <MarketplaceContent />
     </Suspense>
   );

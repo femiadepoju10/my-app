@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { MessageSquare } from "lucide-react";
 
 export default function MessageBadge() {
   const [count, setCount] = useState(0);
@@ -26,11 +27,11 @@ export default function MessageBadge() {
   return (
     <Link
       href="/dashboard/messages"
-      className="relative rounded-lg px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+      className="relative hidden items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 sm:flex"
     >
-      Messages
+      <MessageSquare className="h-4 w-4" />
       {count > 0 && (
-        <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white">
+        <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm">
           {count > 9 ? "9+" : count}
         </span>
       )}

@@ -3,12 +3,12 @@ import { redirect } from "next/navigation";
 import NavTabs from "@/components/layout/NavTabs";
 
 const DASHBOARD_TABS = [
-  { href: "/dashboard", label: "Overview" },
-  { href: "/dashboard/listings", label: "My Listings" },
-  { href: "/dashboard/purchases", label: "My Purchases" },
-  { href: "/dashboard/sales", label: "My Sales" },
-  { href: "/dashboard/messages", label: "Messages" },
-  { href: "/dashboard/profile", label: "Profile" },
+  { href: "/dashboard", label: "Overview", icon: "dashboard" as const },
+  { href: "/dashboard/listings", label: "My Listings", icon: "listings" as const },
+  { href: "/dashboard/purchases", label: "My Purchases", icon: "purchases" as const },
+  { href: "/dashboard/sales", label: "My Sales", icon: "sales" as const },
+  { href: "/dashboard/messages", label: "Messages", icon: "messages" as const },
+  { href: "/dashboard/profile", label: "Profile", icon: "profile" as const },
 ];
 
 export default async function DashboardLayout({
@@ -22,17 +22,18 @@ export default async function DashboardLayout({
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
           Dashboard
         </h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           Welcome back, {session.user.name}
         </p>
       </div>
 
-      <NavTabs tabs={DASHBOARD_TABS} />
-
-      {children}
+      <div className="flex gap-8">
+        <NavTabs tabs={DASHBOARD_TABS} />
+        <div className="min-w-0 flex-1 pb-20 md:pb-0">{children}</div>
+      </div>
     </div>
   );
 }

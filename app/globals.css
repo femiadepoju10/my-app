@@ -3,23 +3,96 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-light: #eef2ff;
+  --primary-dark: #3730a3;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-light: var(--primary-light);
+  --color-primary-dark: var(--primary-dark);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --animate-fade-in: fade-in 0.3s ease-out;
+  --animate-slide-up: slide-up 0.4s ease-out;
+  --animate-slide-in-right: slide-in-right 0.3s ease-out;
+  --animate-pulse-soft: pulse-soft 2s ease-in-out infinite;
+  --animate-spin-slow: spin 1.5s linear infinite;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --primary: #818cf8;
+    --primary-hover: #6366f1;
+    --primary-light: #1e1b4b;
+    --primary-dark: #a5b4fc;
   }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+.animate-fade-in { animation: var(--animate-fade-in); }
+.animate-slide-up { animation: var(--animate-slide-up); }
+.animate-slide-in-right { animation: var(--animate-slide-in-right); }
+.animate-pulse-soft { animation: var(--animate-pulse-soft); }
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #a1a1aa transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: #a1a1aa;
+  border-radius: 3px;
+}
+
+::selection {
+  background-color: var(--primary);
+  color: white;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
 }
