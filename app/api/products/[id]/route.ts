@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
 import { db } from "@/lib/db";
-import { products, productImages, users, transactions } from "@/lib/db/schema";
-import { eq, and, notInArray } from "drizzle-orm";
 import { z } from "zod";
 import cloudinary from "@/lib/cloudinary";
 
@@ -27,27 +26,23 @@ export async function GET(
     return NextResponse.json({ error: "Invalid product ID" }, { status: 400 });
   }
 
-  const product = await db
-    .select()
-    .from(products)
-    .where(eq(products.id, productId))
-    .get();
+  const product = await db.products.findUnique({
+    where: { id: productId },
+  });
 
   if (!product) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
   }
 
-  const images = await db
-    .select()
-    .from(productImages)
-    .where(eq(productImages.productId, productId))
-    .orderBy(productImages.sortOrder);
+  const images = await db.productImages.findMany({
+    where: { productId },
+    orderBy: { sortOrder: "asc" },
+  });
 
-  const seller = await db
-    .select({ id: users.id, name: users.name, createdAt: users.createdAt })
-    .from(users)
-    .where(eq(users.id, product.sellerId))
-    .get();
+  const seller = await db.users.findUnique({
+    where: { id: product.sellerId },
+    select: { id: true, name: true, createdAt: true },
+  });
 
   return NextResponse.json({ product: { ...product, images, seller } });
 }
@@ -56,7 +51,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -64,11 +59,9 @@ export async function PATCH(
   const { id } = await params;
   const productId = parseInt(id, 10);
 
-  const existing = await db
-    .select()
-    .from(products)
-    .where(eq(products.id, productId))
-    .get();
+  const existing = await db.products.findUnique({
+    where: { id: productId },
+  });
 
   if (!existing) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
@@ -101,38 +94,44 @@ export async function PATCH(
     updatedAt: new Date().toISOString(),
   };
 
-  await db
-    .update(products)
-    .set(updateFields)
-    .where(eq(products.id, productId));
+  const updatedProduct = await db.$transaction(async (tx) => {
+    const product = await tx.products.update({
+      where: { id: productId },
+      data: updateFields,
+    });
 
-  if (images) {
-    const oldImages = await db
-      .select()
-      .from(productImages)
-      .where(eq(productImages.productId, productId));
+    if (images) {
+      const oldImages = await tx.productImages.findMany({
+        where: { productId },
+      });
 
-    for (const img of oldImages) {
-      const match = img.imageUrl.match(/\/upload\/(?:v\d+\/)?(.+)\.\w+$/);
-      if (match) {
-        cloudinary.uploader.destroy(match[1]).catch(() => {});
+      await Promise.all(
+        oldImages.map((img) => {
+          const match = img.imageUrl.match(/\/upload\/(?:v\d+\/)?(.+)\.\w+$/);
+          if (match) {
+            return cloudinary.uploader.destroy(match[1]).catch(() => {});
+          }
+          return Promise.resolve();
+        })
+      );
+
+      await tx.productImages.deleteMany({
+        where: { productId },
+      });
+
+      if (images.length > 0) {
+        await tx.productImages.createMany({
+          data: images.map((url: string, index: number) => ({
+            productId,
+            imageUrl: url,
+            sortOrder: index,
+          })),
+        });
       }
     }
 
-    await db
-      .delete(productImages)
-      .where(eq(productImages.productId, productId));
-
-    if (images.length > 0) {
-      await db.insert(productImages).values(
-        images.map((url: string, index: number) => ({
-          productId,
-          imageUrl: url,
-          sortOrder: index,
-        }))
-      );
-    }
-  }
+    return product;
+  });
 
   return NextResponse.json({ success: true });
 }
@@ -141,7 +140,7 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -149,11 +148,9 @@ export async function DELETE(
   const { id } = await params;
   const productId = parseInt(id, 10);
 
-  const existing = await db
-    .select()
-    .from(products)
-    .where(eq(products.id, productId))
-    .get();
+  const existing = await db.products.findUnique({
+    where: { id: productId },
+  });
 
   if (!existing) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
@@ -170,16 +167,14 @@ export async function DELETE(
     );
   }
 
-  const activeTransaction = await db
-    .select()
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.productId, productId),
-        notInArray(transactions.status, ["completed", "refund_completed", "rejected", "disputed"])
-      )
-    )
-    .get();
+  const activeTransaction = await db.transactions.findFirst({
+    where: {
+      productId,
+      status: {
+        notIn: ["completed", "refund_completed", "rejected", "disputed"],
+      },
+    },
+  });
 
   if (activeTransaction) {
     return NextResponse.json(
@@ -188,26 +183,30 @@ export async function DELETE(
     );
   }
 
-  const imagesToDelete = await db
-    .select()
-    .from(productImages)
-    .where(eq(productImages.productId, productId));
+  const imagesToDelete = await db.productImages.findMany({
+    where: { productId },
+  });
 
-  for (const img of imagesToDelete) {
-    const match = img.imageUrl.match(/\/upload\/(?:v\d+\/)?(.+)\.\w+$/);
-    if (match) {
-      cloudinary.uploader.destroy(match[1]).catch(() => {});
-    }
-  }
+  await db.$transaction(async (tx) => {
+    await Promise.all(
+      imagesToDelete.map((img) => {
+        const match = img.imageUrl.match(/\/upload\/(?:v\d+\/)?(.+)\.\w+$/);
+        if (match) {
+          return cloudinary.uploader.destroy(match[1]).catch(() => {});
+        }
+        return Promise.resolve();
+      })
+    );
 
-  await db
-    .delete(productImages)
-    .where(eq(productImages.productId, productId));
+    await tx.productImages.deleteMany({
+      where: { productId },
+    });
 
-  await db
-    .update(products)
-    .set({ status: "removed", updatedAt: new Date().toISOString() })
-    .where(eq(products.id, productId));
+    await tx.products.update({
+      where: { id: productId },
+      data: { status: "removed", updatedAt: new Date().toISOString() },
+    });
+  });
 
   return NextResponse.json({ success: true });
 }

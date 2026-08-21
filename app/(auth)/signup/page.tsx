@@ -80,12 +80,18 @@ export default function SignupPage() {
         onSubmit={handleSubmit}
         className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl shadow-zinc-200/50 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none"
       >
-        {serverError && (
-          <div className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
-            <span className="text-red-500">!</span>
-            {serverError}
-          </div>
-        )}
+      {serverError && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+          <span className="text-red-500">!</span>
+          {serverError}
+        </div>
+      )}
+
+      {(errors.general?.[0] || errors.name?.[0] || errors.email?.[0] || errors.phone?.[0] || errors.password?.[0] || errors.confirmPassword?.[0]) && !serverError && (
+        <div className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+          {errors.general?.[0] || errors.name?.[0] || errors.email?.[0] || errors.phone?.[0] || errors.password?.[0] || errors.confirmPassword?.[0]}
+        </div>
+      )}
 
         <div>
           <label

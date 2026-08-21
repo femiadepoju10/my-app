@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { formatPrice } from "@/lib/utils";
+import Image from "next/image";
+import { formatPrice, formatCondition } from "@/lib/utils";
 
 interface Transaction {
   id: number;
@@ -12,6 +13,12 @@ interface Transaction {
   status: string;
   createdAt: string;
   productId: number;
+  product?: {
+    id: number;
+    title: string;
+    condition: string;
+    images: { imageUrl: string }[];
+  };
 }
 
 export default function PurchasesPage() {
@@ -83,15 +90,35 @@ export default function PurchasesPage() {
             <Link
               key={tx.id}
               href={`/transaction/${tx.id}`}
-              className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white p-4 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+              className="flex items-center gap-4 rounded-lg border border-zinc-200 bg-white p-4 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900"
             >
-              <div>
+              <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-zinc-100 dark:bg-zinc-900">
+                {tx.product?.images?.[0] ? (
+                  <Image
+                    src={tx.product.images[0].imageUrl}
+                    alt={tx.product.title}
+                    fill
+                    className="object-cover"
+                    sizes="64px"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-xs text-zinc-400">
+                    No img
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                  Transaction #{tx.id}
+                  {tx.product?.title || `Transaction #${tx.id}`}
                 </p>
                 <p className="text-xs text-zinc-500">
                   {new Date(tx.createdAt).toLocaleDateString()}
                 </p>
+                {tx.product?.condition && (
+                  <p className="text-xs text-zinc-400">
+                    {formatCondition(tx.product.condition)}
+                  </p>
+                )}
               </div>
               <div className="text-right">
                 <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">

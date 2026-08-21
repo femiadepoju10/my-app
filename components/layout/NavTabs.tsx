@@ -7,14 +7,14 @@ import {
   Package,
   ShoppingCart,
   DollarSign,
-  MessageSquare,
   User,
+  Bell,
 } from "lucide-react";
 
 interface NavTab {
   href: string;
   label: string;
-  icon?: "dashboard" | "listings" | "purchases" | "sales" | "messages" | "profile";
+  icon?: "dashboard" | "listings" | "purchases" | "sales" | "notifications" | "profile";
 }
 
 const iconMap = {
@@ -22,7 +22,7 @@ const iconMap = {
   listings: Package,
   purchases: ShoppingCart,
   sales: DollarSign,
-  messages: MessageSquare,
+  notifications: Bell,
   profile: User,
 };
 

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
 import { db } from "@/lib/db";
-import { products, productImages } from "@/lib/db/schema";
-import { eq, desc, and, sql, gte, lte } from "drizzle-orm";
 import { z } from "zod";
 
 const productSchema = z.object({
@@ -28,77 +27,68 @@ export async function GET(req: Request) {
   const limit = 12;
   const offset = (page - 1) * limit;
 
-  const conditions = mine ? [] : [eq(products.status, "active")];
+  const where: Record<string, unknown> = {};
 
   if (mine) {
-    const session = await auth();
+    const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    conditions.push(eq(products.sellerId, parseInt(session.user.id)));
+    where.sellerId = parseInt(session.user.id);
+  } else {
+    where.status = "active";
   }
 
   if (search) {
-    const escapedSearch = search.replace(/[%_]/g, "\\$&");
-    conditions.push(sql`${products.title} LIKE ${`%${escapedSearch}%`} ESCAPE '\\'`);
+    where.title = { contains: search };
   }
   if (category) {
-    conditions.push(eq(products.category, category));
+    where.category = category;
   }
-  if (minPrice > 0) {
-    conditions.push(gte(products.price, minPrice));
-  }
-  if (maxPrice > 0) {
-    conditions.push(lte(products.price, maxPrice));
+  if (minPrice > 0 || maxPrice > 0) {
+    const priceFilter: Record<string, number> = {};
+    if (minPrice > 0) priceFilter.gte = minPrice;
+    if (maxPrice > 0) priceFilter.lte = maxPrice;
+    where.price = priceFilter;
   }
   if (condition) {
     const VALID_CONDITIONS = ["new", "like_new", "good", "fair", "used"];
     const conditions_list = condition.split(",").filter((c) => VALID_CONDITIONS.includes(c));
     if (conditions_list.length === 1) {
-      conditions.push(sql`${products.condition} = ${conditions_list[0]}`);
+      where.condition = conditions_list[0];
     } else if (conditions_list.length > 1) {
-      conditions.push(sql`${products.condition} IN ${sql.join(conditions_list.map((c) => sql`${c}`), sql`,`)}`);
+      where.condition = { in: conditions_list };
     }
   }
 
-  const where = and(...conditions);
-
-  let orderClause;
+  let orderBy: Record<string, string> = {};
   switch (sort) {
     case "price_low":
-      orderClause = products.price;
+      orderBy = { price: "asc" };
       break;
     case "price_high":
-      orderClause = desc(products.price);
+      orderBy = { price: "desc" };
       break;
     default:
-      orderClause = desc(products.createdAt);
+      orderBy = { createdAt: "desc" };
   }
 
-  const [{ count }] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(products)
-    .where(where);
+  const [countResult, items] = await Promise.all([
+    db.products.count({ where }),
+    db.products.findMany({
+      where,
+      orderBy,
+      take: limit,
+      skip: offset,
+    }),
+  ]);
 
-  const items = await db
-    .select()
-    .from(products)
-    .where(where)
-    .orderBy(orderClause)
-    .limit(limit)
-    .offset(offset);
-
-  const allImages = items.length > 0
-    ? await db
-        .select()
-        .from(productImages)
-        .where(
-          sql`${productImages.productId} IN ${sql.join(
-            items.map((item) => sql`${item.id}`),
-            sql`,`
-          )}`
-        )
-        .orderBy(productImages.sortOrder)
+  const productIds = items.map((item) => item.id);
+  const allImages = productIds.length > 0
+    ? await db.productImages.findMany({
+        where: { productId: { in: productIds } },
+        orderBy: { sortOrder: "asc" },
+      })
     : [];
 
   const imagesByProduct = new Map<number, typeof allImages>();
@@ -115,15 +105,15 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     products: itemsWithImages,
-    total: count,
-    resultsCount: count,
+    total: countResult,
+    resultsCount: countResult,
     page,
-    totalPages: Math.ceil(count / limit),
+    totalPages: Math.ceil(countResult / limit),
   });
 }
 
 export async function POST(req: Request) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -132,28 +122,31 @@ export async function POST(req: Request) {
     const body = await req.json();
     const validated = productSchema.parse(body);
 
-    const [product] = await db
-      .insert(products)
-      .values({
-        sellerId: parseInt(session.user.id),
-        title: validated.title,
-        description: validated.description,
-        category: validated.category,
-        condition: validated.condition,
-        price: validated.price,
-        location: validated.location,
-      })
-      .returning();
+    const product = await db.$transaction(async (tx) => {
+      const newProduct = await tx.products.create({
+        data: {
+          sellerId: parseInt(session.user.id),
+          title: validated.title,
+          description: validated.description,
+          category: validated.category,
+          condition: validated.condition,
+          price: validated.price,
+          location: validated.location,
+        },
+      });
 
-    if (validated.images.length > 0) {
-      await db.insert(productImages).values(
-        validated.images.map((url, index) => ({
-          productId: product.id,
-          imageUrl: url,
-          sortOrder: index,
-        }))
-      );
-    }
+      if (validated.images.length > 0) {
+        await tx.productImages.createMany({
+          data: validated.images.map((url, index) => ({
+            productId: newProduct.id,
+            imageUrl: url,
+            sortOrder: index,
+          })),
+        });
+      }
+
+      return newProduct;
+    });
 
     return NextResponse.json({ product }, { status: 201 });
   } catch (error) {

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 const profileSchema = z.object({
@@ -12,23 +11,22 @@ const profileSchema = z.object({
 });
 
 export async function GET() {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await db
-    .select({
-      id: users.id,
-      name: users.name,
-      email: users.email,
-      phone: users.phone,
-      role: users.role,
-      createdAt: users.createdAt,
-    })
-    .from(users)
-    .where(eq(users.id, parseInt(session.user.id)))
-    .get();
+  const user = await db.users.findFirst({
+    where: { id: parseInt(session.user.id) },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      createdAt: true,
+    },
+  });
 
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -38,7 +36,7 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -56,11 +54,9 @@ export async function PATCH(req: Request) {
   const { name, email, phone } = validated.data;
 
   if (email) {
-    const existing = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, email))
-      .get();
+    const existing = await db.users.findFirst({
+      where: { email },
+    });
 
     if (existing && existing.id !== parseInt(session.user.id)) {
       return NextResponse.json(
@@ -70,14 +66,14 @@ export async function PATCH(req: Request) {
     }
   }
 
-  await db
-    .update(users)
-    .set({
+  await db.users.update({
+    where: { id: parseInt(session.user.id) },
+    data: {
       name,
       email,
       phone: phone || null,
-    })
-    .where(eq(users.id, parseInt(session.user.id)));
+    },
+  });
 
   return NextResponse.json({ success: true });
 }

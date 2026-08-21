@@ -6,7 +6,6 @@ import { useSession } from "next-auth/react";
 import Image from "next/image";
 import { formatPrice, formatCondition } from "@/lib/utils";
 import Link from "next/link";
-import ReviewSection from "@/components/products/ReviewSection";
 import {
   ArrowLeft, Package, Clock, CheckCircle, AlertTriangle,
   Truck, Search, ThumbsUp, ThumbsDown, CreditCard, Banknote,
@@ -23,6 +22,7 @@ interface TransactionData {
   totalAmount: number;
   status: string;
   createdAt: string;
+  updatedAt: string;
   rejectionReason: string | null;
   rejectionPhotos: string | null;
   disputeNote: string | null;
@@ -94,12 +94,18 @@ function TransactionContent() {
       if (!cancelled && res.ok) {
         const data = await res.json();
         setTransaction(data.transaction);
+      } else if (!cancelled && res.status === 403) {
+        router.push("/dashboard");
+        return;
+      } else if (!cancelled && res.status === 401) {
+        router.push(`/login?callbackUrl=/transaction/${params.id}`);
+        return;
       }
       if (!cancelled) setLoading(false);
     }
     load();
     return () => { cancelled = true; };
-  }, [params.id]);
+  }, [params.id, router]);
 
   async function handleStatusChange(newStatus: string, extra?: Record<string, unknown>) {
     if (!transaction) return;
@@ -233,6 +239,95 @@ function TransactionContent() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Transaction Timeline */}
+      <div className="mb-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="border-b border-zinc-100 bg-zinc-50 px-6 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            <Clock className="h-4 w-4" />
+            Transaction Timeline
+          </h3>
+        </div>
+        <div className="p-6">
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/30">
+                <div className="h-2 w-2 rounded-full bg-indigo-600 dark:bg-indigo-400" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Transaction Created</p>
+                <p className="text-xs text-zinc-500">{new Date(transaction.createdAt).toLocaleString()}</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className={`flex h-6 w-6 items-center justify-center rounded-full ${currentStepIndex >= 0 ? "bg-indigo-100 dark:bg-indigo-900/30" : "bg-zinc-100 dark:bg-zinc-800"}`}>
+                <div className={`h-2 w-2 rounded-full ${currentStepIndex >= 0 ? "bg-indigo-600 dark:bg-indigo-400" : "bg-zinc-300 dark:bg-zinc-600"}`} />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Payment Pending</p>
+                <p className="text-xs text-zinc-500">{new Date(transaction.createdAt).toLocaleString()}</p>
+              </div>
+            </div>
+            {currentStepIndex >= 1 && (
+              <div className="flex items-start gap-3">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+                  <div className="h-2 w-2 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Payment Confirmed</p>
+                  <p className="text-xs text-zinc-500">{new Date(transaction.updatedAt).toLocaleString()}</p>
+                </div>
+              </div>
+            )}
+            {currentStepIndex >= 4 && (
+              <div className="flex items-start gap-3">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
+                  <div className="h-2 w-2 rounded-full bg-blue-600 dark:bg-blue-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Item Delivered</p>
+                  <p className="text-xs text-zinc-500">{new Date(transaction.updatedAt).toLocaleString()}</p>
+                </div>
+              </div>
+            )}
+            {currentStepIndex >= 5 && (
+              <div className="flex items-start gap-3">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
+                  <div className="h-2 w-2 rounded-full bg-amber-600 dark:bg-amber-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Inspection Pending</p>
+                  <p className="text-xs text-zinc-500">{new Date(transaction.updatedAt).toLocaleString()}</p>
+                </div>
+              </div>
+            )}
+            {["accepted", "payout_pending", "payout_completed", "completed"].includes(transaction.status) && (
+              <div className="flex items-start gap-3">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+                  <div className="h-2 w-2 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Item Accepted</p>
+                  <p className="text-xs text-zinc-500">{new Date(transaction.updatedAt).toLocaleString()}</p>
+                </div>
+              </div>
+            )}
+            {["rejected", "disputed", "refund_pending", "refund_completed"].includes(transaction.status) && (
+              <div className="flex items-start gap-3">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+                  <div className="h-2 w-2 rounded-full bg-red-600 dark:bg-red-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                    {transaction.status === "rejected" ? "Item Rejected" : transaction.status === "disputed" ? "Disputed" : "Refunded"}
+                  </p>
+                  <p className="text-xs text-zinc-500">{new Date(transaction.updatedAt).toLocaleString()}</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -523,34 +618,8 @@ function TransactionContent() {
               {isBuyer && transaction.seller.phone && <div className="flex justify-between"><span className="text-zinc-500">Phone</span><span>{transaction.seller.phone}</span></div>}
               {!isBuyer && transaction.buyer.phone && <div className="flex justify-between"><span className="text-zinc-500">Phone</span><span>{transaction.buyer.phone}</span></div>}
             </div>
-            <button
-              onClick={async () => {
-                const res = await fetch("/api/conversations", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ transactionId: transaction.id }),
-                });
-                if (res.ok) {
-                  router.push("/dashboard/messages");
-                }
-              }}
-              className="mt-4 flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
-            >
-              <MessageSquare className="h-4 w-4" />
-              Message {isBuyer ? "Seller" : "Buyer"}
-            </button>
           </div>
         </div>
-      )}
-
-      {/* Reviews */}
-      {currentStepIndex >= 5 && transaction.product && (
-        <ReviewSection
-          productId={transaction.product.id}
-          isCompleted={transaction.status === "completed"}
-          isBuyer={isBuyer}
-          transactionId={transaction.id}
-        />
       )}
     </div>
   );

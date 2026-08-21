@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import ProductCard from "@/components/products/ProductCard";
 import { ProductCardSkeleton } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
@@ -18,6 +19,7 @@ interface Product {
   price: number;
   condition: string;
   location: string;
+  status: string;
   images: ProductImage[];
 }
 
@@ -250,16 +252,25 @@ function MarketplaceContent() {
       ) : products.length === 0 ? (
         <EmptyState
           icon="search"
-          title="No products found"
-          description="Try adjusting your filters or search terms to find what you're looking for."
-          action={
+          title={hasActiveFilters ? "No products match your filters" : "No products yet"}
+          description={hasActiveFilters
+            ? "Try adjusting your filters or search terms to find what you're looking for."
+            : "Be the first to list an item on the marketplace."}
+          action={hasActiveFilters ? (
             <button
               onClick={clearFilters}
               className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
             >
               Clear filters
             </button>
-          }
+          ) : (
+            <Link
+              href="/products/sell"
+              className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+            >
+              Sell an item
+            </Link>
+          )}
         />
       ) : (
         <>

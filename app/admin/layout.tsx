@@ -1,13 +1,14 @@
-import { auth } from "@/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 import NavTabs from "@/components/layout/NavTabs";
 
 const ADMIN_TABS = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/transactions", label: "Transactions" },
+  { href: "/admin/disputes", label: "Disputes" },
+  { href: "/admin/refunds", label: "Refunds" },
   { href: "/admin/users", label: "Users" },
 ];
 
@@ -16,14 +17,13 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login");
 
-  const user = await db
-    .select({ role: users.role })
-    .from(users)
-    .where(eq(users.id, parseInt(session.user.id)))
-    .get();
+  const user = await db.users.findFirst({
+    where: { id: parseInt(session.user.id) },
+    select: { role: true },
+  });
 
   if (!user || user.role !== "admin") redirect("/");
 

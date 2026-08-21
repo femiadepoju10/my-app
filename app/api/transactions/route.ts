@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
 import { db } from "@/lib/db";
-import { transactions, products } from "@/lib/db/schema";
-import { eq, and, sql } from "drizzle-orm";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { createNotification } from "@/lib/notifications";
 
 export async function POST(req: Request) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -32,11 +32,9 @@ export async function POST(req: Request) {
 
     const buyerId = parseInt(session.user.id);
 
-    const product = await db
-      .select()
-      .from(products)
-      .where(eq(products.id, productId))
-      .get();
+    const product = await db.products.findUnique({
+      where: { id: productId },
+    });
 
     if (!product) {
       return NextResponse.json(
@@ -59,28 +57,26 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await db.transaction(async (tx) => {
-      const existingTransaction = await tx
-        .select()
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.productId, productId),
-            eq(transactions.status, "payment_pending")
-          )
-        )
-        .get();
+    const existingTransaction = await db.transactions.findFirst({
+      where: {
+        productId,
+        status: "payment_pending",
+      },
+    });
 
-      if (existingTransaction) {
-        return { error: "Someone is already checking out this product" };
-      }
+    if (existingTransaction) {
+      return NextResponse.json(
+        { error: "Someone is already checking out this product" },
+        { status: 400 }
+      );
+    }
 
-      const serviceFee = Math.round(product.price * 0.1);
-      const totalAmount = product.price + serviceFee;
+    const serviceFee = Math.round(product.price * 0.1);
+    const totalAmount = product.price + serviceFee;
 
-      const [transaction] = await tx
-        .insert(transactions)
-        .values({
+    const transaction = await db.$transaction(async (tx) => {
+      const newTransaction = await tx.transactions.create({
+        data: {
           productId,
           buyerId,
           sellerId: product.sellerId,
@@ -88,17 +84,24 @@ export async function POST(req: Request) {
           serviceFee,
           totalAmount,
           status: "payment_pending",
-        })
-        .returning();
+        },
+      });
 
-      return { transactionId: transaction.id };
+      await tx.products.update({
+        where: { id: productId },
+        data: { status: "reserved", updatedAt: new Date().toISOString() },
+      });
+
+      return newTransaction;
     });
 
-    if ("error" in result) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
-    }
+    createNotification(
+      product.sellerId,
+      "transaction",
+      `Your item "${product.title}" has been purchased! Payment is pending.`
+    ).catch(() => {});
 
-    return NextResponse.json(result);
+    return NextResponse.json({ transactionId: transaction.id });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Something went wrong";
@@ -107,7 +110,7 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -119,23 +122,40 @@ export async function GET(req: Request) {
   const limit = 20;
   const offset = (page - 1) * limit;
 
-  const condition =
+  const where =
     role === "seller"
-      ? eq(transactions.sellerId, userId)
-      : eq(transactions.buyerId, userId);
+      ? { sellerId: userId }
+      : { buyerId: userId };
 
-  const [{ count }] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(transactions)
-    .where(condition);
-
-  const items = await db
-    .select()
-    .from(transactions)
-    .where(condition)
-    .orderBy(transactions.createdAt)
-    .limit(limit)
-    .offset(offset);
+  const [count, items] = await Promise.all([
+    db.transactions.count({ where }),
+    db.transactions.findMany({
+      where,
+      select: {
+        id: true,
+        productId: true,
+        buyerId: true,
+        sellerId: true,
+        itemPrice: true,
+        serviceFee: true,
+        totalAmount: true,
+        status: true,
+        createdAt: true,
+        product: {
+          select: {
+            id: true,
+            title: true,
+            condition: true,
+            location: true,
+            images: { where: { sortOrder: 0 }, take: 1 },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      skip: offset,
+    }),
+  ]);
 
   return NextResponse.json({
     transactions: items,

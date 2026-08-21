@@ -134,6 +134,12 @@ function LoginContent() {
           >
             Forgot your password?
           </Link>
+          <Link
+            href="/verify-email/resend"
+            className="ml-4 mt-2 inline-block text-xs font-medium text-zinc-600 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
+          >
+            Resend verification email
+          </Link>
         </div>
 
         <button

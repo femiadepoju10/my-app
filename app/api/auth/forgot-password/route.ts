@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
@@ -24,11 +22,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Email is required" }, { status: 400 });
   }
 
-  const user = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, email.toLowerCase().trim()))
-    .get();
+  const user = await db.users.findFirst({
+    where: { email: email.toLowerCase().trim() },
+  });
 
   if (!user) {
     return NextResponse.json({ message: "If an account exists, a reset link has been sent." });
@@ -37,10 +33,10 @@ export async function POST(req: Request) {
   const token = crypto.randomBytes(32).toString("hex");
   const expiry = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
-  await db
-    .update(users)
-    .set({ resetToken: token, resetTokenExpiry: expiry })
-    .where(eq(users.id, user.id));
+  await db.users.update({
+    where: { id: user.id },
+    data: { resetToken: token, resetTokenExpiry: expiry },
+  });
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   await sendPasswordResetEmail(user.email, user.name, token, baseUrl);

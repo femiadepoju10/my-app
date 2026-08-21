@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 
 export async function POST(req: Request) {
   const body = await req.json();
@@ -11,11 +9,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Token required" }, { status: 400 });
   }
 
-  const user = await db
-    .select()
-    .from(users)
-    .where(eq(users.verificationToken, token))
-    .get();
+  const user = await db.users.findFirst({
+    where: { verificationToken: token },
+  });
 
   if (!user || !user.verificationTokenExpiry) {
     return NextResponse.json({ error: "Invalid or expired verification link" }, { status: 400 });
@@ -25,14 +21,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Verification link has expired" }, { status: 400 });
   }
 
-  await db
-    .update(users)
-    .set({
+  await db.users.update({
+    where: { id: user.id },
+    data: {
       emailVerified: new Date().toISOString(),
       verificationToken: null,
       verificationTokenExpiry: null,
-    })
-    .where(eq(users.id, user.id));
+    },
+  });
 
   return NextResponse.json({ message: "Email verified successfully" });
 }

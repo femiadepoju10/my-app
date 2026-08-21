@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { formatPrice } from "@/lib/utils";
 import { ShoppingBag, Shield, Clock, CheckCircle, CreditCard, Loader2 } from "lucide-react";
 
@@ -23,6 +24,8 @@ interface TransactionData {
 function CheckoutContent() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const { data: session, status } = useSession();
   const reference = searchParams.get("reference");
 
   const [transaction, setTransaction] = useState<TransactionData | null>(null);
@@ -31,17 +34,30 @@ function CheckoutContent() {
 
   useEffect(() => {
     async function fetchTransaction() {
+      if (status === "loading") return;
+      if (!session?.user) {
+        router.push(`/login?callbackUrl=/checkout/${params.transactionId}`);
+        return;
+      }
+
       const res = await fetch(`/api/transactions/${params.transactionId}`);
       if (!res.ok) {
         setLoading(false);
         return;
       }
       const data = await res.json();
-      setTransaction(data.transaction);
+      const tx = data.transaction;
+
+      if (tx && tx.buyerId !== parseInt(session.user.id)) {
+        router.push("/products");
+        return;
+      }
+
+      setTransaction(tx);
       setLoading(false);
     }
     fetchTransaction();
-  }, [params.transactionId]);
+  }, [params.transactionId, session, router]);
 
   useEffect(() => {
     if (!reference || !transaction) return;

@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
     ],
   },
   poweredByHeader: false,
+  turbopack: {},
+  webpack: (config) => {
+    config.resolve.fallback = { ...config.resolve.fallback, util: false };
+    return config;
+  },
   async headers() {
     return [
       {

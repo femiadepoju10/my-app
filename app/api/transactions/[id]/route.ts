@@ -1,25 +1,17 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
 import { db } from "@/lib/db";
-import {
-  transactions,
-  products,
-  productImages,
-  users,
-  payments,
-  payouts,
-  refunds,
-} from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 import { initializeTransaction } from "@/lib/paystack";
 import { sendTransactionEmail } from "@/lib/email";
+import { notifyTransactionParticipants } from "@/lib/notifications";
 import crypto from "crypto";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -34,11 +26,9 @@ export async function GET(
     );
   }
 
-  const transaction = await db
-    .select()
-    .from(transactions)
-    .where(eq(transactions.id, transactionId))
-    .get();
+  const transaction = await db.transactions.findUnique({
+    where: { id: transactionId },
+  });
 
   if (!transaction) {
     return NextResponse.json(
@@ -56,49 +46,38 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const product = await db
-    .select()
-    .from(products)
-    .where(eq(products.id, transaction.productId))
-    .get();
+  const product = await db.products.findUnique({
+    where: { id: transaction.productId },
+  });
 
   const images = product
-    ? await db
-        .select()
-        .from(productImages)
-        .where(eq(productImages.productId, product.id))
-        .orderBy(productImages.sortOrder)
+    ? await db.productImages.findMany({
+        where: { productId: product.id },
+        orderBy: { sortOrder: "asc" },
+      })
     : [];
 
-  const buyer = await db
-    .select({ id: users.id, name: users.name, email: users.email, phone: users.phone })
-    .from(users)
-    .where(eq(users.id, transaction.buyerId))
-    .get();
+  const buyer = await db.users.findUnique({
+    where: { id: transaction.buyerId },
+    select: { id: true, name: true, email: true, phone: true },
+  });
 
-  const seller = await db
-    .select({ id: users.id, name: users.name, email: users.email, phone: users.phone })
-    .from(users)
-    .where(eq(users.id, transaction.sellerId))
-    .get();
+  const seller = await db.users.findUnique({
+    where: { id: transaction.sellerId },
+    select: { id: true, name: true, email: true, phone: true },
+  });
 
-  const payment = await db
-    .select()
-    .from(payments)
-    .where(eq(payments.transactionId, transactionId))
-    .get();
+  const payment = await db.payments.findFirst({
+    where: { transactionId },
+  });
 
-  const payout = await db
-    .select()
-    .from(payouts)
-    .where(eq(payouts.transactionId, transactionId))
-    .get();
+  const payout = await db.payouts.findFirst({
+    where: { transactionId },
+  });
 
-  const refund = await db
-    .select()
-    .from(refunds)
-    .where(eq(refunds.transactionId, transactionId))
-    .get();
+  const refund = await db.refunds.findFirst({
+    where: { transactionId },
+  });
 
   return NextResponse.json({
     transaction: {
@@ -133,7 +112,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -148,11 +127,9 @@ export async function PATCH(
     );
   }
 
-  const transaction = await db
-    .select()
-    .from(transactions)
-    .where(eq(transactions.id, transactionId))
-    .get();
+  const transaction = await db.transactions.findUnique({
+    where: { id: transactionId },
+  });
 
   if (!transaction) {
     return NextResponse.json(
@@ -261,79 +238,81 @@ export async function PATCH(
 
   const finalStatus = newStatus === "accepted" ? "payout_pending" : newStatus;
 
-  await db.transaction(async (tx) => {
-    if (finalStatus === "payout_pending" || finalStatus === "completed") {
-      await tx
-        .update(products)
-        .set({ status: "sold", updatedAt: new Date().toISOString() })
-        .where(eq(products.id, transaction.productId));
+  await db.$transaction(async (tx) => {
+    if (finalStatus === "payment_confirmed" || finalStatus === "payout_pending" || finalStatus === "completed") {
+      await tx.products.update({
+        where: { id: transaction.productId },
+        data: { status: "sold", updatedAt: new Date().toISOString() },
+      });
     }
 
     if (finalStatus === "payout_pending") {
-      const existingPayout = await tx
-        .select()
-        .from(payouts)
-        .where(eq(payouts.transactionId, transactionId))
-        .get();
+      const existingPayout = await tx.payouts.findFirst({
+        where: { transactionId },
+      });
 
       if (!existingPayout) {
-        await tx.insert(payouts).values({
-          transactionId,
-          sellerId: transaction.sellerId,
-          amount: transaction.itemPrice,
-          status: "pending",
+        await tx.payouts.create({
+          data: {
+            transactionId,
+            sellerId: transaction.sellerId,
+            amount: transaction.itemPrice,
+            status: "pending",
+          },
         });
       }
     }
 
     if (finalStatus === "refund_pending") {
-      const existingRefund = await tx
-        .select()
-        .from(refunds)
-        .where(eq(refunds.transactionId, transactionId))
-        .get();
+      const existingRefund = await tx.refunds.findFirst({
+        where: { transactionId },
+      });
 
       if (!existingRefund) {
-        await tx.insert(refunds).values({
-          transactionId,
-          amount: transaction.totalAmount,
-          reason: body.rejectionReason || null,
-          status: "pending",
+        await tx.refunds.create({
+          data: {
+            transactionId,
+            amount: transaction.totalAmount,
+            reason: body.rejectionReason || null,
+            status: "pending",
+          },
         });
       }
     }
 
     if (finalStatus === "rejected" || finalStatus === "refund_pending" || finalStatus === "disputed") {
-      await tx
-        .update(products)
-        .set({ status: "active", updatedAt: new Date().toISOString() })
-        .where(eq(products.id, transaction.productId));
+      await tx.products.update({
+        where: { id: transaction.productId },
+        data: { status: "active", updatedAt: new Date().toISOString() },
+      });
     }
 
     if (finalStatus === "payout_completed") {
-      await tx
-        .update(payouts)
-        .set({ status: "completed", paidAt: new Date().toISOString() })
-        .where(eq(payouts.transactionId, transactionId));
+      await tx.payouts.updateMany({
+        where: { transactionId },
+        data: { status: "completed", paidAt: new Date().toISOString() },
+      });
     }
 
     if (finalStatus === "refund_completed") {
-      await tx
-        .update(refunds)
-        .set({ status: "completed" })
-        .where(eq(refunds.transactionId, transactionId));
+      await tx.refunds.updateMany({
+        where: { transactionId },
+        data: { status: "completed" },
+      });
     }
 
-    await tx
-      .update(transactions)
-      .set({ ...updateData, status: finalStatus })
-      .where(eq(transactions.id, transactionId));
+    await tx.transactions.update({
+      where: { id: transactionId },
+      data: { ...updateData, status: finalStatus },
+    });
   });
 
   if (newStatus === "accepted") {
-    sendTransactionEmail(transactionId, "payout_pending").catch(() => {});
+    sendTransactionEmail(transactionId, "item_accepted").catch(() => {});
+  } else if (newStatus !== "payout_pending") {
+    sendTransactionEmail(transactionId, finalStatus).catch(() => {});
   }
-  sendTransactionEmail(transactionId, finalStatus).catch(() => {});
+  notifyTransactionParticipants(transactionId, finalStatus).catch(() => {});
 
   return NextResponse.json({ success: true, status: finalStatus });
 }
@@ -342,7 +321,7 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -357,11 +336,9 @@ export async function POST(
     );
   }
 
-  const transaction = await db
-    .select()
-    .from(transactions)
-    .where(eq(transactions.id, transactionId))
-    .get();
+  const transaction = await db.transactions.findUnique({
+    where: { id: transactionId },
+  });
 
   if (!transaction) {
     return NextResponse.json(
@@ -388,6 +365,15 @@ export async function POST(
   const reference = "SB_" + crypto.randomBytes(8).toString("hex").toUpperCase();
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   const callbackUrl = `${baseUrl}/checkout/${transaction.id}?reference=${reference}`;
+
+  await db.payments.create({
+    data: {
+      transactionId,
+      paystackRef: reference,
+      amount: transaction.totalAmount,
+      status: "pending",
+    },
+  });
 
   try {
     const paystackResult = await initializeTransaction({

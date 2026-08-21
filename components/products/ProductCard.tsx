@@ -13,6 +13,7 @@ interface Product {
   price: number;
   condition: string;
   location: string;
+  status: string;
   images: ProductImage[];
 }
 
@@ -53,6 +54,13 @@ export default function ProductCard({ product }: { product: Product }) {
             {formatCondition(product.condition)}
           </span>
         </div>
+        {product.status === "sold" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <span className="rounded-full bg-white/90 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-zinc-900 shadow-lg">
+              Sold
+            </span>
+          </div>
+        )}
       </div>
       <div className="p-4">
         <h3 className="line-clamp-1 text-sm font-semibold text-zinc-900 transition-colors group-hover:text-indigo-600 dark:text-zinc-50 dark:group-hover:text-indigo-400">

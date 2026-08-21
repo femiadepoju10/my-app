@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { transactions, payments, products } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 import { verifyWebhookSignature, verifyTransaction } from "@/lib/paystack";
 import { sendTransactionEmail } from "@/lib/email";
 
@@ -32,11 +30,9 @@ export async function POST(req: Request) {
     }
 
     try {
-      const existingPayment = await db
-        .select()
-        .from(payments)
-        .where(eq(payments.paystackRef, reference))
-        .get();
+      const existingPayment = await db.payments.findFirst({
+        where: { paystackRef: reference },
+      });
 
       if (existingPayment && existingPayment.status === "successful") {
         return NextResponse.json({ received: true });
@@ -71,12 +67,10 @@ export async function POST(req: Request) {
 
       const txId = Number(transactionIdFromMeta);
 
-      await db.transaction(async (tx) => {
-        const transaction = await tx
-          .select()
-          .from(transactions)
-          .where(eq(transactions.id, txId))
-          .get();
+      await db.$transaction(async (tx) => {
+        const transaction = await tx.transactions.findUnique({
+          where: { id: txId },
+        });
 
         if (!transaction) {
           return;
@@ -87,37 +81,39 @@ export async function POST(req: Request) {
         }
 
         if (existingPayment) {
-          await tx
-            .update(payments)
-            .set({
+          await tx.payments.update({
+            where: { paystackRef: reference },
+            data: {
               status: "successful",
               gatewayResponse: JSON.stringify(verificationData),
               paidAt: paid_at || new Date().toISOString(),
-            })
-            .where(eq(payments.paystackRef, reference));
+            },
+          });
         } else {
-          await tx.insert(payments).values({
-            transactionId: txId,
-            paystackRef: reference,
-            amount: verifiedAmount || amount,
-            status: "successful",
-            gatewayResponse: JSON.stringify(verificationData),
-            paidAt: paid_at || new Date().toISOString(),
+          await tx.payments.create({
+            data: {
+              transactionId: txId,
+              paystackRef: reference,
+              amount: verifiedAmount || amount,
+              status: "successful",
+              gatewayResponse: JSON.stringify(verificationData),
+              paidAt: paid_at || new Date().toISOString(),
+            },
           });
         }
 
-        await tx
-          .update(transactions)
-          .set({
+        await tx.transactions.update({
+          where: { id: txId },
+          data: {
             status: "payment_confirmed",
             updatedAt: new Date().toISOString(),
-          })
-          .where(eq(transactions.id, txId));
+          },
+        });
 
-        await tx
-          .update(products)
-          .set({ status: "reserved", updatedAt: new Date().toISOString() })
-          .where(eq(products.id, transaction.productId));
+        await tx.products.update({
+          where: { id: transaction.productId },
+          data: { status: "reserved", updatedAt: new Date().toISOString() },
+        });
       });
 
       sendTransactionEmail(txId, "payment_confirmed").catch(() => {});

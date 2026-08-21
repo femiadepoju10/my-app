@@ -1,51 +1,55 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
 import { db } from "@/lib/db";
-import { users, transactions } from "@/lib/db/schema";
-import { eq, desc, sql } from "drizzle-orm";
 
 export async function GET() {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const allUsers = await db
-    .select({
-      id: users.id,
-      name: users.name,
-      email: users.email,
-      phone: users.phone,
-      role: users.role,
-      createdAt: users.createdAt,
-    })
-    .from(users)
-    .orderBy(desc(users.createdAt));
+  const allUsers = await db.users.findMany({
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
 
   const userIds = allUsers.map((u) => u.id);
-  const txCounts = userIds.length > 0
-    ? await db
-        .select({
-          userId: transactions.buyerId,
-          count: sql<number>`count(*)`,
-        })
-        .from(transactions)
-        .where(sql`${transactions.buyerId} IN ${sql.join(userIds.map((id) => sql`${id}`), sql`,`)}`)
-        .groupBy(transactions.buyerId)
-    : [];
+  const [buyerTxCounts, sellerTxCounts] = userIds.length > 0
+    ? await Promise.all([
+        db.transactions.groupBy({
+          by: ["buyerId"],
+          where: { buyerId: { in: userIds } },
+          _count: { buyerId: true },
+        }),
+        db.transactions.groupBy({
+          by: ["sellerId"],
+          where: { sellerId: { in: userIds } },
+          _count: { sellerId: true },
+        }),
+      ])
+    : [[], []];
 
-  const txMap = new Map(txCounts.map((t) => [t.userId, t.count]));
+  const buyerTxMap = new Map(buyerTxCounts.map((t) => [t.buyerId, t._count.buyerId]));
+  const sellerTxMap = new Map(sellerTxCounts.map((t) => [t.sellerId, t._count.sellerId]));
 
   return NextResponse.json({
     users: allUsers.map((u) => ({
       ...u,
-      transactionCount: txMap.get(u.id) || 0,
+      transactionCount: (buyerTxMap.get(u.id) || 0) + (sellerTxMap.get(u.id) || 0),
     })),
   });
 }
 
 export async function PATCH(req: Request) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -57,14 +61,19 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  if (userId === parseInt(session.user.id)) {
+  const parsedUserId = parseInt(userId, 10);
+  if (isNaN(parsedUserId)) {
+    return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
+  }
+
+  if (parsedUserId === parseInt(session.user.id)) {
     return NextResponse.json({ error: "Cannot change your own role" }, { status: 400 });
   }
 
-  await db
-    .update(users)
-    .set({ role })
-    .where(eq(users.id, userId));
+  await db.users.update({
+    where: { id: parsedUserId },
+    data: { role },
+  });
 
   return NextResponse.json({ success: true });
 }

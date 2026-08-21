@@ -1,10 +1,12 @@
-import { auth } from "@/auth";
+import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 
-export default auth((req) => {
+export async function middleware(req: any) {
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  const isLoggedIn = !!token;
+  const userRole = token?.role;
+
   const { nextUrl } = req;
-  const isLoggedIn = !!req.auth;
-  const userRole = req.auth?.user?.role;
 
   if (nextUrl.pathname === "/login" && isLoggedIn) {
     return NextResponse.redirect(new URL("/dashboard", nextUrl));
@@ -40,7 +42,7 @@ export default auth((req) => {
   }
 
   return NextResponse.next();
-});
+}
 
 export const config = {
   matcher: ["/dashboard/:path*", "/checkout/:path*", "/transaction/:path*", "/admin/:path*", "/products/sell/:path*", "/login", "/signup"],

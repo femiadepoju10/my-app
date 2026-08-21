@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import { sendVerificationEmail } from "@/lib/email";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
@@ -23,11 +21,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "User ID required" }, { status: 400 });
   }
 
-  const user = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, userId))
-    .get();
+  const user = await db.users.findFirst({
+    where: { id: userId },
+  });
 
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -40,10 +36,10 @@ export async function POST(req: Request) {
   const token = crypto.randomBytes(32).toString("hex");
   const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-  await db
-    .update(users)
-    .set({ verificationToken: token, verificationTokenExpiry: expiry })
-    .where(eq(users.id, user.id));
+  await db.users.update({
+    where: { id: user.id },
+    data: { verificationToken: token, verificationTokenExpiry: expiry },
+  });
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   await sendVerificationEmail(user.email, user.name, token, baseUrl);

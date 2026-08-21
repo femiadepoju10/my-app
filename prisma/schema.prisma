@@ -1,0 +1,238 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model users {
+  id                      Int       @id @default(autoincrement())
+  name                    String
+  email                   String    @unique
+  phone                   String?
+  passwordHash            String    @map("password_hash")
+  role                    String    @default("user")
+  emailVerified           String?   @map("email_verified")
+  verificationToken       String?   @map("verification_token")
+  verificationTokenExpiry String?   @map("verification_token_expiry")
+  resetToken              String?   @map("reset_token")
+  resetTokenExpiry        String?   @map("reset_token_expiry")
+  createdAt               DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  productsSold            products[]          @relation("sellerProducts")
+  buyerTransactions       transactions[]      @relation("transactionBuyer")
+  sellerTransactions      transactions[]      @relation("transactionSeller")
+  payoutsReceived         payouts[]
+  disputesOpened          disputes[]
+  notifications           notifications[]
+
+  @@map("users")
+}
+
+model products {
+  id          Int       @id @default(autoincrement())
+  sellerId    Int       @map("seller_id")
+  title       String
+  description String
+  category    String
+  condition   ProductCondition
+  price       Int
+  location    String
+  status      ProductStatus @default(active)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt   DateTime  @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  seller       users            @relation("sellerProducts", fields: [sellerId], references: [id])
+  images       productImages[]
+  transactions transactions[]
+
+  @@index([sellerId])
+  @@index([status])
+  @@index([category])
+  @@index([createdAt])
+  @@map("products")
+}
+
+model productImages {
+  id        Int    @id @default(autoincrement())
+  productId Int    @map("product_id")
+  imageUrl  String @map("image_url")
+  sortOrder Int    @default(0) @map("sort_order")
+
+  product products @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+model transactions {
+  id           Int             @id @default(autoincrement())
+  productId    Int             @map("product_id")
+  buyerId      Int             @map("buyer_id")
+  sellerId     Int             @map("seller_id")
+  itemPrice    Int             @map("item_price")
+  serviceFee   Int             @map("service_fee")
+  totalAmount  Int             @map("total_amount")
+  status       TransactionStatus @default(payment_pending)
+  createdAt    DateTime        @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt    DateTime        @default(now()) @db.Timestamptz(6) @map("updated_at")
+  rejectionReason String?      @map("rejection_reason")
+  rejectionPhotos String?      @map("rejection_photos")
+  disputeNote     String?      @map("dispute_note")
+
+  product    products    @relation(fields: [productId], references: [id])
+  buyer      users       @relation("transactionBuyer", fields: [buyerId], references: [id])
+  seller     users       @relation("transactionSeller", fields: [sellerId], references: [id])
+  payments   payments[]
+  payouts    payouts[]
+  refunds    refunds[]
+  disputes   disputes?
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([productId])
+  @@index([status])
+  @@map("transactions")
+}
+
+model payments {
+  id              Int          @id @default(autoincrement())
+  transactionId   Int          @map("transaction_id")
+  paystackRef     String       @unique @map("paystack_ref")
+  amount          Int
+  status          PaymentStatus @default(pending)
+  gatewayResponse String?      @map("gateway_response")
+  paidAt          String?      @map("paid_at")
+
+  transaction transactions @relation(fields: [transactionId], references: [id])
+
+  @@index([transactionId])
+  @@map("payments")
+}
+
+model payouts {
+  id            Int         @id @default(autoincrement())
+  transactionId Int         @map("transaction_id")
+  sellerId      Int         @map("seller_id")
+  amount        Int
+  status        PayoutStatus @default(pending)
+  paystackRef   String?     @map("paystack_ref")
+  paidAt        String?     @map("paid_at")
+
+  transaction transactions @relation(fields: [transactionId], references: [id])
+  seller      users        @relation(fields: [sellerId], references: [id])
+
+  @@index([transactionId])
+  @@index([sellerId])
+  @@map("payouts")
+}
+
+model refunds {
+  id            Int         @id @default(autoincrement())
+  transactionId Int         @map("transaction_id")
+  amount        Int
+  reason        String?
+  status        RefundStatus @default(pending)
+  paystackRef   String?     @map("paystack_ref")
+  createdAt     DateTime    @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  transaction transactions @relation(fields: [transactionId], references: [id])
+
+  @@index([transactionId])
+  @@map("refunds")
+}
+
+model disputes {
+  id          Int           @id @default(autoincrement())
+  transactionId Int         @unique @map("transaction_id")
+  openedById  Int           @map("opened_by_id")
+  reason      String
+  evidence    String?
+  status      DisputeStatus @default(open)
+  resolution  String?
+  createdAt   DateTime      @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  transaction transactions @relation(fields: [transactionId], references: [id])
+  openedBy    users         @relation(fields: [openedById], references: [id])
+
+  @@index([transactionId])
+  @@index([openedById])
+  @@map("disputes")
+}
+
+model notifications {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  type      String
+  message   String
+  readAt    String?   @map("read_at")
+  createdAt DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  user users @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+enum ProductCondition {
+  new
+  like_new
+  good
+  fair
+  used
+}
+
+enum ProductStatus {
+  active
+  reserved
+  sold
+  removed
+}
+
+enum TransactionStatus {
+  payment_pending
+  payment_confirmed
+  seller_contacted
+  item_delivered
+  inspection_pending
+  accepted
+  rejected
+  disputed
+  payout_pending
+  payout_completed
+  completed
+  refund_pending
+  refund_completed
+}
+
+enum PaymentStatus {
+  pending
+  successful
+  failed
+  refunded
+}
+
+enum PayoutStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+enum RefundStatus {
+  pending
+  approved
+  processing
+  completed
+  failed
+}
+
+enum DisputeStatus {
+  open
+  seller_accepted_return
+  seller_disputed
+  admin_reviewing
+  refunded
+  seller_paid
+}

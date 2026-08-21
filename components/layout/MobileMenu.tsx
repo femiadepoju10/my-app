@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, ShoppingCart, Tag, LayoutDashboard, Shield, LogOut, MessageSquare } from "lucide-react";
+import { Menu, X, ShoppingCart, Tag, LayoutDashboard, Shield, LogOut } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 interface SessionUser {
@@ -104,18 +104,6 @@ export default function MobileMenu({ session }: { session: SessionUser | null })
                   >
                     <LayoutDashboard className="h-4 w-4" />
                     Dashboard
-                  </Link>
-                  <Link
-                    href="/dashboard/messages"
-                    onClick={() => setOpen(false)}
-                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                      isActive("/dashboard/messages")
-                        ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-400"
-                        : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                    }`}
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                    Messages
                   </Link>
                   <div className="my-2 border-t border-zinc-200 dark:border-zinc-800" />
                   <button

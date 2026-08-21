@@ -13,6 +13,7 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setMessage("");
 
     try {
       const res = await fetch("/api/auth/forgot-password", {
@@ -21,6 +22,12 @@ export default function ForgotPasswordPage() {
         body: JSON.stringify({ email }),
       });
       const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Something went wrong. Please try again.");
+        return;
+      }
+
       setMessage(data.message || "If an account exists, a reset link has been sent.");
     } catch {
       setError("Something went wrong. Please try again.");
@@ -38,7 +45,7 @@ export default function ForgotPasswordPage() {
         </p>
       </div>
 
-      {message ? (
+      {message && !error ? (
         <div className="rounded-lg border border-zinc-200 bg-white p-6 text-center dark:border-zinc-800 dark:bg-zinc-950">
           <div className="mb-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400">
             {message}

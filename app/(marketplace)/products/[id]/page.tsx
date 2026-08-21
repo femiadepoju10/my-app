@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { formatPrice, formatCondition } from "@/lib/utils";
-import ReviewSection from "@/components/products/ReviewSection";
 import {
   ArrowLeft, MapPin, Tag, Calendar, User, Shield, CreditCard,
   ShoppingCart, MessageSquare, Edit, Trash2, Loader2, ChevronRight, Package,
@@ -40,7 +39,7 @@ interface Product {
 export default function ProductDetailsPage() {
   const params = useParams();
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const { addToast } = useToast();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -207,10 +206,11 @@ export default function ProductDetailsPage() {
               <Package className="h-4 w-4" />
               This is your listing
             </div>
-          ) : (
+          ) : product.status === "active" ? (
             <button
               onClick={async () => {
-                if (!session) {
+                if (status === "loading") return;
+                if (!session?.user) {
                   router.push(`/login?callbackUrl=/products/${params.id}`);
                   return;
                 }
@@ -234,19 +234,19 @@ export default function ProductDetailsPage() {
                 }
               }}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:bg-indigo-700 hover:shadow-xl disabled:opacity-50"
-              disabled={product.status !== "active" || buying}
+              disabled={buying}
             >
               {buying ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <ShoppingCart className="h-4 w-4" />
               )}
-              {buying
-                ? "Starting checkout..."
-                : product.status === "active"
-                  ? "Buy Now"
-                  : "Not Available"}
+              {buying ? "Starting checkout..." : "Buy Now"}
             </button>
+          ) : (
+            <div className="flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+              {product.status === "sold" ? "Sold" : product.status === "reserved" ? "Reserved" : "Not Available"}
+            </div>
           )}
         </div>
 
@@ -259,15 +259,6 @@ export default function ProductDetailsPage() {
           </p>
         </div>
       </div>
-    </div>
-
-    <div className="mt-8">
-      <ReviewSection
-        productId={product.id}
-        isCompleted={false}
-        isBuyer={false}
-        transactionId={0}
-      />
     </div>
     </div>
   );

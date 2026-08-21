@@ -1,10 +1,8 @@
-import { createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
-import * as schema from "./schema";
+import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
-const client = createClient({
-  url: process.env.TURSO_DATABASE_URL!,
-  authToken: process.env.TURSO_AUTH_TOKEN,
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL,
 });
 
-export const db = drizzle(client, { schema });
+export const db = new PrismaClient({ adapter });

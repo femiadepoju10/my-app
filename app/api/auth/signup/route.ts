@@ -3,9 +3,8 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { sendVerificationEmail } from "@/lib/email";
+import { sendVerificationEmail, sendWelcomeEmail } from "@/lib/email";
+import { createNotification } from "@/lib/notifications";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 const signupSchema = z
@@ -45,11 +44,9 @@ export async function POST(req: Request) {
 
     const { name, email, phone, password } = validated.data;
 
-    const existingUser = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, email))
-      .get();
+    const existingUser = await db.users.findFirst({
+      where: { email },
+    });
 
     if (existingUser) {
       return NextResponse.json(
@@ -58,21 +55,46 @@ export async function POST(req: Request) {
       );
     }
 
+    if (phone) {
+      const existingPhone = await db.users.findFirst({
+        where: { phone },
+      });
+
+      if (existingPhone) {
+        return NextResponse.json(
+          { error: { phone: ["Phone number already in use"] } },
+          { status: 409 }
+        );
+      }
+    }
+
     const passwordHash = await bcrypt.hash(password, 12);
     const verificationToken = crypto.randomBytes(32).toString("hex");
     const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-    const [newUser] = await db.insert(users).values({
-      name,
-      email,
-      phone,
-      passwordHash,
-      verificationToken,
-      verificationTokenExpiry,
-    }).returning();
+    const newUser = await db.users.create({
+      data: {
+        name,
+        email,
+        phone,
+        passwordHash,
+        verificationToken,
+        verificationTokenExpiry,
+      },
+    });
+
+    console.log("[Signup] User created:", { userId: newUser.id, email: newUser.email });
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-    sendVerificationEmail(email, name, verificationToken, baseUrl).catch(() => {});
+    sendVerificationEmail(email, name, verificationToken, baseUrl).catch((err) => {
+      console.error("[Signup] Failed to send verification email:", err);
+    });
+    sendWelcomeEmail(email, name).catch((err) => {
+      console.error("[Signup] Failed to send welcome email:", err);
+    });
+    createNotification(newUser.id, "registration", "Welcome to Skillbridge! Your account has been created successfully.").catch((err) => {
+      console.error("[Signup] Failed to create notification:", err);
+    });
 
     return NextResponse.json(
       { message: "Account created successfully", userId: newUser.id },

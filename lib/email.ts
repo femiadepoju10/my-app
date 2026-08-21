@@ -1,7 +1,5 @@
 import { Resend } from "resend";
 import { db } from "@/lib/db";
-import { transactions, products, users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 import { formatPrice } from "@/lib/utils";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -33,31 +31,23 @@ function emailWrapper(title: string, body: string): string {
 }
 
 async function getTransactionData(transactionId: number) {
-  const tx = await db
-    .select()
-    .from(transactions)
-    .where(eq(transactions.id, transactionId))
-    .get();
+  const tx = await db.transactions.findUnique({
+    where: { id: transactionId },
+  });
 
   if (!tx) return null;
 
-  const product = await db
-    .select()
-    .from(products)
-    .where(eq(products.id, tx.productId))
-    .get();
+  const product = await db.products.findUnique({
+    where: { id: tx.productId },
+  });
 
-  const buyer = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, tx.buyerId))
-    .get();
+  const buyer = await db.users.findUnique({
+    where: { id: tx.buyerId },
+  });
 
-  const seller = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, tx.sellerId))
-    .get();
+  const seller = await db.users.findUnique({
+    where: { id: tx.sellerId },
+  });
 
   return { tx, product, buyer, seller };
 }
@@ -194,6 +184,23 @@ export async function sendPasswordResetEmail(
   }
 }
 
+export async function sendWelcomeEmail(email: string, name: string) {
+  try {
+    await sendEmail(
+      email,
+      "Welcome to Skillbridge!",
+      emailWrapper(
+        "Welcome to Skillbridge!",
+        `<p>Hi ${name},</p>
+         <p>Welcome to Skillbridge! Your account has been created successfully.</p>
+         <p>You can now browse products, make purchases, and start selling.</p>
+         <p>If you have any questions, feel free to reach out to our support team.</p>`
+      )
+    );
+  } catch {
+    // Silent fail
+  }
+}
 export async function sendVerificationEmail(
   email: string,
   name: string,

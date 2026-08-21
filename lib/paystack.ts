@@ -63,8 +63,9 @@ export function verifyWebhookSignature(
   body: string,
   signature: string
 ): boolean {
+  const secret = process.env.PAYSTACK_WEBHOOK_SECRET || PAYSTACK_SECRET;
   const hash = crypto
-    .createHmac("sha512", PAYSTACK_SECRET)
+    .createHmac("sha512", secret)
     .update(body)
     .digest("hex");
 

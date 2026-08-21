@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
@@ -34,11 +32,9 @@ export async function POST(req: Request) {
 
   const { token, password } = validated.data;
 
-  const user = await db
-    .select()
-    .from(users)
-    .where(eq(users.resetToken, token))
-    .get();
+  const user = await db.users.findFirst({
+    where: { resetToken: token },
+  });
 
   if (!user || !user.resetTokenExpiry) {
     return NextResponse.json({ error: "Invalid or expired reset link" }, { status: 400 });
@@ -50,14 +46,14 @@ export async function POST(req: Request) {
 
   const passwordHash = await bcrypt.hash(password, 12);
 
-  await db
-    .update(users)
-    .set({
+  await db.users.update({
+    where: { id: user.id },
+    data: {
       passwordHash,
       resetToken: null,
       resetTokenExpiry: null,
-    })
-    .where(eq(users.id, user.id));
+    },
+  });
 
   return NextResponse.json({ message: "Password reset successful" });
 }

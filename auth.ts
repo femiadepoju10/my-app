@@ -1,14 +1,12 @@
-import NextAuth from "next-auth";
+import NextAuth, { getServerSession, type SessionStrategy } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 import { validateEnv } from "@/lib/env";
 
 validateEnv();
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const authOptions = {
   providers: [
     Credentials({
       credentials: {
@@ -20,11 +18,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        const user = await db
-          .select()
-          .from(users)
-          .where(eq(users.email, credentials.email as string))
-          .get();
+        const user = await db.users.findFirst({
+          where: { email: credentials.email as string },
+        });
 
         if (!user) {
           return null;
@@ -39,10 +35,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        if (!user.emailVerified) {
-          return null;
-        }
-
         return {
           id: String(user.id),
           name: user.name,
@@ -53,42 +45,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   session: {
-    strategy: "jwt",
-    maxAge: 7 * 24 * 60 * 60, // 7 days
+    strategy: "jwt" as SessionStrategy,
+    maxAge: 7 * 24 * 60 * 60,
   },
   pages: {
     signIn: "/login",
   },
   callbacks: {
-    async authorized({ auth, request }) {
-      const isLoggedIn = !!auth;
-      const { pathname } = request.nextUrl;
-
-      const isProtected =
-        pathname.startsWith("/dashboard") ||
-        pathname.startsWith("/checkout") ||
-        pathname.startsWith("/transaction") ||
-        pathname.startsWith("/products/sell") ||
-        pathname.startsWith("/admin");
-
-      if (isProtected && !isLoggedIn) {
-        return false;
-      }
-
-      if (pathname.startsWith("/admin") && auth?.user?.role !== "admin") {
-        return false;
-      }
-
-      return true;
-    },
-    async jwt({ token, user }) {
+    async jwt({ token, user }: any) {
       if (user) {
-        token.id = user.id;
-        token.role = (user as { role: string }).role;
+        token.id = (user as unknown as { id: string }).id;
+        token.role = (user as unknown as { role: string }).role;
       }
       return token;
     },
-    async session({ session, token }) {
+    async session({ session, token }: any) {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as "user" | "admin";
@@ -96,4 +67,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
   },
-});
+};
+
+export const auth = () => getServerSession(authOptions);
+
+export const signIn = async (provider: string, options?: any) => {
+  const { signIn: nextSignIn } = await import("next-auth/react");
+  return nextSignIn(provider, options);
+};
+
+export const signOut = async (options?: any) => {
+  const { signOut: nextSignOut } = await import("next-auth/react");
+  return nextSignOut(options);
+};

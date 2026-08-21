@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     "Buy and sell with escrow protection. Your payment is held safely until you confirm delivery.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"

@@ -1,12 +1,14 @@
 import Link from "next/link";
-import { auth, signOut } from "@/auth";
+import { getServerSession } from "next-auth";
+import { signOut } from "next-auth/react";
 import { Handshake, ShoppingCart, Tag, LayoutDashboard, Shield, LogOut } from "lucide-react";
-import MessageBadge from "./MessageBadge";
 import MobileMenu from "./MobileMenu";
+import NotificationBell from "./NotificationBell";
 import BrandName from "@/components/ui/BrandName";
+import { authOptions } from "@/auth";
 
 export default async function Header() {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
 
   const navLinks = [
     { href: "/products", label: "Browse", icon: ShoppingCart },
@@ -41,6 +43,7 @@ export default async function Header() {
         <div className="flex items-center gap-2">
           {session?.user ? (
             <>
+              <NotificationBell />
               {session.user.role === "admin" && (
                 <Link
                   href="/admin"
@@ -57,12 +60,9 @@ export default async function Header() {
                 <LayoutDashboard className="h-4 w-4" />
                 Dashboard
               </Link>
-              <MessageBadge />
               <form
-                action={async () => {
-                  "use server";
-                  await signOut({ redirectTo: "/" });
-                }}
+                action="/api/auth/signout"
+                method="POST"
               >
                 <button
                   type="submit"

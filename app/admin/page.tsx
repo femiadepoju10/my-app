@@ -1,41 +1,39 @@
-import { auth } from "@/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
 import { db } from "@/lib/db";
-import { users, products, transactions, payouts, refunds } from "@/lib/db/schema";
-import { sql, eq } from "drizzle-orm";
 import Link from "next/link";
 import { formatPrice } from "@/lib/utils";
 
 export default async function AdminPage() {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user) return null;
 
-  const [{ totalUsers }] = await db
-    .select({ totalUsers: sql<number>`count(*)` })
-    .from(users);
+  const totalUsers = await db.users.count();
+  const totalTransactions = await db.transactions.count();
+  const activeListings = await db.products.count({
+    where: { status: "active" },
+  });
 
-  const [{ totalTransactions }] = await db
-    .select({ totalTransactions: sql<number>`count(*)` })
-    .from(transactions);
+  const totalRevenueResult = await db.transactions.aggregate({
+    _sum: {
+      serviceFee: true,
+    },
+    where: {
+      status: {
+        notIn: ["payment_pending", "rejected", "disputed", "refund_completed"],
+      },
+    },
+  });
 
-  const [{ activeListings }] = await db
-    .select({ activeListings: sql<number>`count(*)` })
-    .from(products)
-    .where(eq(products.status, "active"));
+  const totalRevenue = totalRevenueResult._sum.serviceFee || 0;
 
-  const [{ totalRevenue }] = await db
-    .select({ totalRevenue: sql<number>`coalesce(sum(${transactions.serviceFee}), 0)` })
-    .from(transactions)
-    .where(sql`${transactions.status} NOT IN ('payment_pending', 'rejected', 'disputed', 'refund_completed')`);
+  const pendingPayouts = await db.payouts.count({
+    where: { status: "pending" },
+  });
 
-  const [{ pendingPayouts }] = await db
-    .select({ pendingPayouts: sql<number>`count(*)` })
-    .from(payouts)
-    .where(eq(payouts.status, "pending"));
-
-  const [{ pendingRefunds }] = await db
-    .select({ pendingRefunds: sql<number>`count(*)` })
-    .from(refunds)
-    .where(eq(refunds.status, "pending"));
+  const pendingRefunds = await db.refunds.count({
+    where: { status: "pending" },
+  });
 
   return (
     <div>

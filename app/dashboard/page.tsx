@@ -1,34 +1,30 @@
-import { auth } from "@/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
 import { db } from "@/lib/db";
-import { products, transactions } from "@/lib/db/schema";
-import { eq, and, sql, notInArray } from "drizzle-orm";
 import Link from "next/link";
 import { Package, ShoppingCart, DollarSign, ArrowRight } from "lucide-react";
 
 export default async function DashboardPage() {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user) return null;
   const userId = parseInt(session.user.id);
 
-  const [{ activeCount }] = await db
-    .select({ activeCount: sql<number>`count(*)` })
-    .from(products)
-    .where(and(eq(products.sellerId, userId), eq(products.status, "active")));
-
-  const [{ purchaseCount }] = await db
-    .select({ purchaseCount: sql<number>`count(*)` })
-    .from(transactions)
-    .where(eq(transactions.buyerId, userId));
-
-  const [{ saleCount }] = await db
-    .select({ saleCount: sql<number>`count(*)` })
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.sellerId, userId),
-        notInArray(transactions.status, ["payment_pending", "rejected", "refund_completed"])
-      )
-    );
+  const [activeCount, purchaseCount, saleCount] = await Promise.all([
+    db.products.count({
+      where: { sellerId: userId, status: "active" },
+    }),
+    db.transactions.count({
+      where: { buyerId: userId },
+    }),
+    db.transactions.count({
+      where: {
+        sellerId: userId,
+        status: {
+          notIn: ["payment_pending", "rejected", "refund_completed"],
+        },
+      },
+    }),
+  ]);
 
   const stats = [
     {

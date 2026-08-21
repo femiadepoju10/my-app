@@ -1,4 +1,5 @@
-import { auth } from "@/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
 import { redirect } from "next/navigation";
 import NavTabs from "@/components/layout/NavTabs";
 
@@ -7,7 +8,7 @@ const DASHBOARD_TABS = [
   { href: "/dashboard/listings", label: "My Listings", icon: "listings" as const },
   { href: "/dashboard/purchases", label: "My Purchases", icon: "purchases" as const },
   { href: "/dashboard/sales", label: "My Sales", icon: "sales" as const },
-  { href: "/dashboard/messages", label: "Messages", icon: "messages" as const },
+  { href: "/dashboard/notifications", label: "Notifications", icon: "notifications" as const },
   { href: "/dashboard/profile", label: "Profile", icon: "profile" as const },
 ];
 
@@ -16,7 +17,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login");
 
   return (
