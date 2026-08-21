@@ -3,13 +3,17 @@ import { authOptions } from "@/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import NavTabs from "@/components/layout/NavTabs";
+import { Card } from "@/components/ui/Card";
+import { Avatar } from "@/components/ui/Avatar";
+import { Badge } from "@/components/ui/Badge";
+import { Shield } from "lucide-react";
 
 const ADMIN_TABS = [
-  { href: "/admin", label: "Overview" },
-  { href: "/admin/transactions", label: "Transactions" },
-  { href: "/admin/disputes", label: "Disputes" },
-  { href: "/admin/refunds", label: "Refunds" },
-  { href: "/admin/users", label: "Users" },
+  { href: "/admin", label: "Overview", icon: "dashboard" as const },
+  { href: "/admin/transactions", label: "Transactions", icon: "purchases" as const },
+  { href: "/admin/disputes", label: "Disputes", icon: "notifications" as const },
+  { href: "/admin/refunds", label: "Refunds", icon: "sales" as const },
+  { href: "/admin/users", label: "Users", icon: "profile" as const },
 ];
 
 export default async function AdminLayout({
@@ -22,25 +26,36 @@ export default async function AdminLayout({
 
   const user = await db.users.findFirst({
     where: { id: parseInt(session.user.id) },
-    select: { role: true },
+    select: { role: true, name: true },
   });
 
   if (!user || user.role !== "admin") redirect("/");
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-          Admin Dashboard
-        </h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Manage users, transactions, and payouts
-        </p>
+      <div className="mb-8 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-lg">
+            <Shield className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+              Admin Dashboard
+            </h1>
+            <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+              Welcome back, {user.name}
+            </p>
+          </div>
+        </div>
+        <Badge variant="primary" size="sm">
+          Admin Access
+        </Badge>
       </div>
 
-      <NavTabs tabs={ADMIN_TABS} />
-
-      {children}
+      <div className="flex gap-8">
+        <NavTabs tabs={ADMIN_TABS} />
+        <div className="min-w-0 flex-1 pb-20 md:pb-0">{children}</div>
+      </div>
     </div>
   );
 }

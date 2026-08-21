@@ -12,6 +12,11 @@ import {
   ShieldCheck, MessageSquare, Camera, X, Loader2, ChevronRight,
 } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Separator } from "@/components/ui/Separator";
+import { Avatar } from "@/components/ui/Avatar";
 
 interface TransactionData {
   id: number;
@@ -197,6 +202,22 @@ function TransactionContent() {
     }
   })();
 
+  const statusVariantMap: Record<string, "default" | "primary" | "success" | "warning" | "danger"> = {
+    payment_pending: "warning",
+    payment_confirmed: "primary",
+    seller_contacted: "primary",
+    item_delivered: "primary",
+    inspection_pending: "warning",
+    accepted: "success",
+    payout_pending: "warning",
+    payout_completed: "success",
+    completed: "success",
+    rejected: "danger",
+    disputed: "danger",
+    refund_pending: "warning",
+    refund_completed: "success",
+  };
+
   return (
     <div className="mx-auto max-w-2xl py-8 animate-fade-in">
       <Link href="/dashboard" className="mb-6 inline-flex items-center gap-1.5 text-sm text-zinc-500 transition-colors hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400">
@@ -215,10 +236,17 @@ function TransactionContent() {
       </div>
 
       {/* Status Card */}
-      <div className="mb-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      <Card padding="none" className="mb-8 overflow-hidden">
         <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4">
-          <h2 className="text-lg font-semibold text-white">{currentStatus.title}</h2>
-          <p className="text-sm text-white/80">{currentStatus.description}</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-white">{currentStatus.title}</h2>
+              <p className="text-sm text-white/80">{currentStatus.description}</p>
+            </div>
+            <Badge variant={statusVariantMap[transaction.status] || "default"} size="lg">
+              {transaction.status.replace(/_/g, " ")}
+            </Badge>
+          </div>
         </div>
 
         <div className="p-6">
@@ -240,7 +268,7 @@ function TransactionContent() {
             );
           })}
         </div>
-      </div>
+      </Card>
 
       {/* Transaction Timeline */}
       <div className="mb-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
@@ -334,71 +362,71 @@ function TransactionContent() {
       {/* Action Buttons */}
       <div className="mb-8 space-y-3">
         {transaction.status === "seller_contacted" && isSeller && (
-          <button onClick={() => handleStatusChange("item_delivered")} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:bg-indigo-700 disabled:opacity-50">
-            {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+          <Button onClick={() => handleStatusChange("item_delivered")} isLoading={actionLoading} className="w-full">
+            <Truck className="h-4 w-4" />
             {actionLoading ? "Updating..." : "Mark as Delivered"}
-          </button>
+          </Button>
         )}
 
         {transaction.status === "item_delivered" && isBuyer && (
-          <button onClick={() => handleStatusChange("inspection_pending")} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:bg-indigo-700 disabled:opacity-50">
-            {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+          <Button onClick={() => handleStatusChange("inspection_pending")} isLoading={actionLoading} className="w-full">
+            <Search className="h-4 w-4" />
             {actionLoading ? "Updating..." : "I've Received the Item"}
-          </button>
+          </Button>
         )}
 
         {transaction.status === "inspection_pending" && isBuyer && (
           <>
-            <button onClick={() => setShowAcceptModal(true)} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:bg-emerald-700 disabled:opacity-50">
+            <Button onClick={() => setShowAcceptModal(true)} isLoading={actionLoading} className="w-full" variant="success">
               <ThumbsUp className="h-4 w-4" />
               Accept Item
-            </button>
-            <button onClick={() => setShowRejectForm(true)} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-300 px-4 py-3 text-sm font-semibold text-red-600 transition-all hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20">
+            </Button>
+            <Button onClick={() => setShowRejectForm(true)} isLoading={actionLoading} className="w-full" variant="destructive" outline>
               <ThumbsDown className="h-4 w-4" />
               Report Problem
-            </button>
+            </Button>
           </>
         )}
 
         {transaction.status === "rejected" && (isSeller || isAdmin) && (
-          <button onClick={() => handleStatusChange("disputed")} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 px-4 py-3 text-sm font-semibold text-zinc-700 transition-all hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+          <Button onClick={() => handleStatusChange("disputed")} isLoading={actionLoading} className="w-full" variant="outline">
             {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
             {actionLoading ? "Updating..." : "Escalate to Dispute"}
-          </button>
+          </Button>
         )}
 
         {(transaction.status === "rejected" || transaction.status === "disputed") && isAdmin && (
-          <button onClick={() => handleStatusChange("refund_pending")} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-amber-500/25 transition-all hover:bg-amber-600 disabled:opacity-50">
+          <Button onClick={() => handleStatusChange("refund_pending")} isLoading={actionLoading} className="w-full" variant="warning">
             {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
             {actionLoading ? "Updating..." : "Approve Refund"}
-          </button>
+          </Button>
         )}
 
         {transaction.status === "refund_pending" && isAdmin && (
-          <button onClick={() => handleStatusChange("refund_completed")} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:bg-emerald-700 disabled:opacity-50">
+          <Button onClick={() => handleStatusChange("refund_completed")} isLoading={actionLoading} className="w-full">
             {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
             {actionLoading ? "Updating..." : "Process Refund"}
-          </button>
+          </Button>
         )}
 
         {transaction.status === "payout_pending" && isAdmin && (
-          <button onClick={() => handleStatusChange("payout_completed")} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:bg-emerald-700 disabled:opacity-50">
+          <Button onClick={() => handleStatusChange("payout_completed")} isLoading={actionLoading} className="w-full">
             {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
             {actionLoading ? "Updating..." : "Mark Payout Complete"}
-          </button>
+          </Button>
         )}
 
         {transaction.status === "payout_completed" && isAdmin && (
-          <button onClick={() => handleStatusChange("completed")} disabled={actionLoading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:bg-emerald-700 disabled:opacity-50">
+          <Button onClick={() => handleStatusChange("completed")} isLoading={actionLoading} className="w-full">
             {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
             {actionLoading ? "Updating..." : "Complete Transaction"}
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Accept Modal */}
       {showAcceptModal && (
-        <div className="mb-8 overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20">
+        <Card padding="none" className="mb-8 overflow-hidden border-emerald-200 dark:border-emerald-800">
           <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 px-6 py-4">
             <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
               <ShieldCheck className="h-5 w-5" />
@@ -410,21 +438,21 @@ function TransactionContent() {
               Are you sure you want to accept this item? This will release {formatPrice(transaction.itemPrice)} to the seller.
             </p>
             <div className="flex gap-3">
-              <button onClick={() => { handleStatusChange("accepted"); setShowAcceptModal(false); }} disabled={actionLoading} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-emerald-700 disabled:opacity-50">
+              <Button onClick={() => { handleStatusChange("accepted"); setShowAcceptModal(false); }} isLoading={actionLoading}>
                 {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
                 {actionLoading ? "Processing..." : "Yes, Accept"}
-              </button>
-              <button onClick={() => setShowAcceptModal(false)} className="rounded-xl border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300">
+              </Button>
+              <Button variant="outline" onClick={() => setShowAcceptModal(false)}>
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Reject Form */}
       {showRejectForm && (
-        <div className="mb-8 overflow-hidden rounded-2xl border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
+        <Card padding="none" className="mb-8 overflow-hidden border-red-200 dark:border-red-800">
           <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4">
             <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
               <AlertTriangle className="h-5 w-5" />
@@ -466,21 +494,21 @@ function TransactionContent() {
             </div>
 
             <div className="flex gap-3">
-              <button onClick={handleReject} disabled={!rejectReason || actionLoading} className="flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-red-700 disabled:opacity-50">
+              <Button onClick={handleReject} disabled={!rejectReason || actionLoading} variant="destructive">
                 {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
                 {actionLoading ? "Submitting..." : "Submit Report"}
-              </button>
-              <button onClick={() => setShowRejectForm(false)} className="rounded-xl border border-zinc-300 px-5 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300">
+              </Button>
+              <Button variant="outline" onClick={() => setShowRejectForm(false)}>
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Rejection Details */}
       {transaction.status === "rejected" && transaction.rejectionReason && (
-        <div className="mb-8 overflow-hidden rounded-2xl border border-red-200 bg-white dark:border-red-800 dark:bg-zinc-950">
+        <Card padding="none" className="mb-8 overflow-hidden border-red-200 dark:border-red-800">
           <div className="border-b border-red-100 bg-red-50 px-6 py-3 dark:border-red-900 dark:bg-red-900/10">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-red-700 dark:text-red-400">
               <AlertTriangle className="h-4 w-4" />
@@ -497,12 +525,12 @@ function TransactionContent() {
               </div>
             )}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Payout Details */}
       {(transaction.status === "payout_pending" || transaction.status === "payout_completed" || transaction.status === "completed") && (
-        <div className="mb-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+        <Card padding="none" className="mb-8 overflow-hidden">
           <div className="border-b border-zinc-100 bg-zinc-50 px-6 py-3 dark:border-zinc-800 dark:bg-zinc-900">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
               <Banknote className="h-4 w-4" />
@@ -514,9 +542,12 @@ function TransactionContent() {
               <span className="text-zinc-500">Seller receives</span>
               <span className="font-semibold text-indigo-600 dark:text-indigo-400">{formatPrice(transaction.itemPrice)}</span>
             </div>
+            <Separator />
             <div className="flex justify-between text-sm">
               <span className="text-zinc-500">Payout status</span>
-              <span className="font-medium capitalize">{transaction.payout?.status || "pending"}</span>
+              <Badge variant={transaction.payout?.status === "completed" ? "success" : "warning"} size="sm">
+                {transaction.payout?.status || "pending"}
+              </Badge>
             </div>
             {transaction.payout?.paidAt && (
               <div className="flex justify-between text-sm">
@@ -525,12 +556,12 @@ function TransactionContent() {
               </div>
             )}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Refund Details */}
       {(transaction.status === "refund_pending" || transaction.status === "refund_completed") && (
-        <div className="mb-8 overflow-hidden rounded-2xl border border-amber-200 bg-white dark:border-amber-800 dark:bg-zinc-950">
+        <Card padding="none" className="mb-8 overflow-hidden border-amber-200 dark:border-amber-800">
           <div className="border-b border-amber-100 bg-amber-50 px-6 py-3 dark:border-amber-900 dark:bg-amber-900/10">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-400">
               <Banknote className="h-4 w-4" />
@@ -542,9 +573,12 @@ function TransactionContent() {
               <span className="text-zinc-500">Refund amount</span>
               <span className="font-semibold text-amber-600 dark:text-amber-400">{formatPrice(transaction.refund?.amount || transaction.totalAmount)}</span>
             </div>
+            <Separator />
             <div className="flex justify-between text-sm">
               <span className="text-zinc-500">Refund status</span>
-              <span className="font-medium capitalize">{transaction.refund?.status || "pending"}</span>
+              <Badge variant={transaction.refund?.status === "completed" ? "success" : "warning"} size="sm">
+                {transaction.refund?.status || "pending"}
+              </Badge>
             </div>
             {transaction.refund?.reason && (
               <div className="flex justify-between text-sm">
@@ -553,12 +587,12 @@ function TransactionContent() {
               </div>
             )}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Product Info */}
       {transaction.product && (
-        <div className="mb-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+        <Card padding="none" className="mb-8 overflow-hidden">
           <div className="border-b border-zinc-100 bg-zinc-50 px-6 py-3 dark:border-zinc-800 dark:bg-zinc-900">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
               <Package className="h-4 w-4" />
@@ -580,11 +614,11 @@ function TransactionContent() {
               </div>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Payment Info */}
-      <div className="mb-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+      <Card padding="none" className="mb-8 overflow-hidden">
         <div className="border-b border-zinc-100 bg-zinc-50 px-6 py-3 dark:border-zinc-800 dark:bg-zinc-900">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
             <CreditCard className="h-4 w-4" />
@@ -592,20 +626,36 @@ function TransactionContent() {
           </h3>
         </div>
         <div className="p-6 space-y-2">
-          <div className="flex justify-between text-sm"><span className="text-zinc-500">Item price</span><span>{formatPrice(transaction.itemPrice)}</span></div>
-          <div className="flex justify-between text-sm"><span className="text-zinc-500">Service fee (10%)</span><span>{formatPrice(transaction.serviceFee)}</span></div>
-          <div className="border-t border-zinc-200 pt-2 dark:border-zinc-700">
-            <div className="flex justify-between font-semibold"><span>Total</span><span className="text-indigo-600 dark:text-indigo-400">{formatPrice(transaction.totalAmount)}</span></div>
+          <div className="flex justify-between text-sm">
+            <span className="text-zinc-500">Item price</span>
+            <span className="font-medium text-zinc-900 dark:text-zinc-50">{formatPrice(transaction.itemPrice)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-zinc-500">Service fee (10%)</span>
+            <span className="font-medium text-zinc-900 dark:text-zinc-50">{formatPrice(transaction.serviceFee)}</span>
+          </div>
+          <Separator />
+          <div className="flex justify-between font-semibold">
+            <span>Total</span>
+            <span className="text-indigo-600 dark:text-indigo-400">{formatPrice(transaction.totalAmount)}</span>
           </div>
           {transaction.payment && (
-            <div className="mt-2 flex justify-between text-sm"><span className="text-zinc-500">Payment status</span><span className="font-medium capitalize">{transaction.payment.status}</span></div>
+            <>
+              <Separator />
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-500">Payment status</span>
+                <Badge variant={transaction.payment.status === "successful" ? "success" : "warning"} size="sm">
+                  {transaction.payment.status}
+                </Badge>
+              </div>
+            </>
           )}
         </div>
-      </div>
+      </Card>
 
       {/* Contact Info */}
       {currentStepIndex >= 1 && transaction.buyer && transaction.seller && (
-        <div className="mb-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+        <Card padding="none" className="mb-8 overflow-hidden">
           <div className="border-b border-zinc-100 bg-zinc-50 px-6 py-3 dark:border-zinc-800 dark:bg-zinc-900">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
               <MessageSquare className="h-4 w-4" />
@@ -613,13 +663,25 @@ function TransactionContent() {
             </h3>
           </div>
           <div className="p-6">
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-zinc-500">Name</span><span>{isBuyer ? transaction.seller.name : transaction.buyer.name}</span></div>
-              {isBuyer && transaction.seller.phone && <div className="flex justify-between"><span className="text-zinc-500">Phone</span><span>{transaction.seller.phone}</span></div>}
-              {!isBuyer && transaction.buyer.phone && <div className="flex justify-between"><span className="text-zinc-500">Phone</span><span>{transaction.buyer.phone}</span></div>}
+            <div className="flex items-center gap-4">
+              <Avatar
+                src={undefined}
+                fallback={isBuyer ? transaction.seller.name : transaction.buyer.name}
+                size="lg"
+              />
+              <div className="flex-1 space-y-1">
+                <p className="font-semibold text-zinc-900 dark:text-zinc-50">
+                  {isBuyer ? transaction.seller.name : transaction.buyer.name}
+                </p>
+                {(isBuyer ? transaction.seller.phone : transaction.buyer.phone) && (
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                    {isBuyer ? transaction.seller.phone : transaction.buyer.phone}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

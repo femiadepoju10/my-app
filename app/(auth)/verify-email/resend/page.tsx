@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Mail } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Card } from "@/components/ui/Card";
 
 export default function ResendVerificationPage() {
   const [email, setEmail] = useState("");
@@ -37,7 +41,7 @@ export default function ResendVerificationPage() {
   }
 
   return (
-    <div className="w-full max-w-md">
+    <div className="w-full max-w-md animate-fade-in">
       <div className="mb-8 text-center">
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">Resend verification email</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
@@ -46,37 +50,42 @@ export default function ResendVerificationPage() {
       </div>
 
       {message && !error ? (
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 text-center dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="mb-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400">
+        <Card padding="lg" className="text-center">
+          <div className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400">
             {message}
           </div>
-          <Link href="/login" className="text-sm font-medium text-zinc-900 hover:underline dark:text-zinc-50">
+          <Link href="/login" className="text-sm font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">
             Back to login
           </Link>
-        </div>
+        </Card>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-          {error && (
-            <div className="rounded-md bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{error}</div>
-          )}
+        <Card padding="lg">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="rounded-xl bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{error}</div>
+            )}
 
-          <div>
-            <label htmlFor="email" className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Email</label>
-            <input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              placeholder="you@example.com" />
-          </div>
+            <Input
+              label="Email"
+              type="email"
+              id="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              icon={<Mail className="h-4 w-4" />}
+            />
 
-          <button type="submit" disabled={loading}
-            className="w-full rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200">
-            {loading ? "Sending..." : "Resend verification email"}
-          </button>
-        </form>
+            <Button type="submit" isLoading={loading} className="w-full">
+              {loading ? "Sending..." : "Resend verification email"}
+            </Button>
+          </form>
+        </Card>
       )}
 
       <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
         Already verified?{" "}
-        <Link href="/login" className="font-medium text-zinc-900 hover:underline dark:text-zinc-50">Log in</Link>
+        <Link href="/login" className="font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">Log in</Link>
       </p>
     </div>
   );

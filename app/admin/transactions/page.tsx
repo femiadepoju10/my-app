@@ -3,6 +3,12 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { formatPrice } from "@/lib/utils";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Input } from "@/components/ui/Input";
+import EmptyState from "@/components/ui/EmptyState";
+import { Loader2, Search, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Transaction {
   id: number;
@@ -15,20 +21,20 @@ interface Transaction {
   productName: string;
 }
 
-const statusColor: Record<string, string> = {
-  payment_pending: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-  payment_confirmed: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  seller_contacted: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  item_delivered: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-  inspection_pending: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-  accepted: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-  rejected: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-  disputed: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-  payout_pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  payout_completed: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-  completed: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-  refund_pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  refund_completed: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+const statusVariantMap: Record<string, "default" | "primary" | "success" | "warning" | "danger"> = {
+  payment_pending: "warning",
+  payment_confirmed: "primary",
+  seller_contacted: "primary",
+  item_delivered: "primary",
+  inspection_pending: "warning",
+  accepted: "success",
+  rejected: "danger",
+  disputed: "danger",
+  payout_pending: "warning",
+  payout_completed: "success",
+  completed: "success",
+  refund_pending: "warning",
+  refund_completed: "success",
 };
 
 const STATUS_OPTIONS = [
@@ -44,6 +50,7 @@ export default function AdminTransactionsPage() {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     async function fetchTransactions() {
@@ -63,13 +70,29 @@ export default function AdminTransactionsPage() {
     fetchTransactions();
   }, [status, page]);
 
+  const filteredTransactions = transactions.filter(
+    (tx) =>
+      tx.productName.toLowerCase().includes(search.toLowerCase()) ||
+      tx.buyerName.toLowerCase().includes(search.toLowerCase()) ||
+      String(tx.id).includes(search)
+  );
+
   return (
-    <div>
+    <div className="animate-fade-in">
       <div className="mb-6 flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px] sm:max-w-xs">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+          <Input
+            placeholder="Search transactions..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
         <select
           value={status}
           onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+          className="rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
         >
           <option value="">All Statuses</option>
           {STATUS_OPTIONS.filter(Boolean).map((s) => (
@@ -79,12 +102,20 @@ export default function AdminTransactionsPage() {
       </div>
 
       {loading ? (
-        <div className="py-20 text-center text-zinc-500">Loading...</div>
-      ) : transactions.length === 0 ? (
-        <div className="py-20 text-center text-zinc-500">No transactions found.</div>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+        </div>
+      ) : filteredTransactions.length === 0 ? (
+        <Card padding="lg">
+          <EmptyState
+            icon="search"
+            title="No transactions found"
+            description="Try adjusting your filters or search terms."
+          />
+        </Card>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
                 <tr>
@@ -97,20 +128,20 @@ export default function AdminTransactionsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                {transactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900">
+                {filteredTransactions.map((tx) => (
+                  <tr key={tx.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors">
                     <td className="px-4 py-3">
-                      <Link href={`/transaction/${tx.id}`} className="font-medium text-zinc-900 hover:underline dark:text-zinc-50">
+                      <Link href={`/transaction/${tx.id}`} className="font-medium text-indigo-600 hover:underline dark:text-indigo-400">
                         #{tx.id}
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 max-w-[200px] truncate">{tx.productName}</td>
                     <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{tx.buyerName}</td>
-                    <td className="px-4 py-3 font-medium">{formatPrice(tx.totalAmount)}</td>
+                    <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-50">{formatPrice(tx.totalAmount)}</td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColor[tx.status] || ""}`}>
+                      <Badge variant={statusVariantMap[tx.status] || "default"} size="sm">
                         {tx.status.replace(/_/g, " ")}
-                      </span>
+                      </Badge>
                     </td>
                     <td className="px-4 py-3 text-zinc-500">{new Date(tx.createdAt).toLocaleDateString()}</td>
                   </tr>
@@ -121,13 +152,27 @@ export default function AdminTransactionsPage() {
 
           {totalPages > 1 && (
             <div className="mt-6 flex items-center justify-center gap-2">
-              <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
                 Previous
-              </button>
-              <span className="px-3 py-2 text-sm text-zinc-600 dark:text-zinc-400">Page {page} of {totalPages}</span>
-              <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+              </Button>
+              <span className="px-3 py-2 text-sm text-zinc-600 dark:text-zinc-400">
+                Page {page} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+              >
                 Next
-              </button>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
           )}
         </>

@@ -1,29 +1,31 @@
-import { PackageOpen, ShoppingCart, MessageSquare, SearchX, Inbox } from "lucide-react";
+import { LucideIcon } from "lucide-react";
+import { Package, ShoppingCart, Bell, Inbox, Search } from "lucide-react";
+import { Button } from "./Button";
+
+type EmptyStateIcon = "package" | "cart" | "bell" | "inbox" | "search";
+
+const iconMap: Record<EmptyStateIcon, LucideIcon> = {
+  package: Package,
+  cart: ShoppingCart,
+  bell: Bell,
+  inbox: Inbox,
+  search: Search,
+};
 
 interface EmptyStateProps {
-  icon?: "package" | "cart" | "message" | "search" | "inbox";
+  icon: EmptyStateIcon;
   title: string;
   description: string;
   action?: React.ReactNode;
 }
 
-const icons = {
-  package: PackageOpen,
-  cart: ShoppingCart,
-  message: MessageSquare,
-  search: SearchX,
-  inbox: Inbox,
-};
-
-export default function EmptyState({ icon = "inbox", title, description, action }: EmptyStateProps) {
-  const Icon = icons[icon];
+export default function EmptyState({ icon, title, description, action }: EmptyStateProps) {
+  const Icon = iconMap[icon];
 
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center animate-fade-in">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-100 dark:bg-zinc-800">
-        <Icon className="h-8 w-8 text-zinc-400" />
-      </div>
-      <h3 className="mt-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      {Icon && <Icon className="mb-4 h-12 w-12 text-zinc-300 dark:text-zinc-600" />}
+      <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
         {title}
       </h3>
       <p className="mt-2 max-w-sm text-sm text-zinc-500 dark:text-zinc-400">

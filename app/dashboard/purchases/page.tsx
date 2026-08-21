@@ -4,6 +4,11 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { formatPrice, formatCondition } from "@/lib/utils";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import EmptyState from "@/components/ui/EmptyState";
+import { ShoppingBag, Loader2 } from "lucide-react";
 
 interface Transaction {
   id: number;
@@ -21,6 +26,22 @@ interface Transaction {
   };
 }
 
+const statusVariantMap: Record<string, "default" | "primary" | "success" | "warning" | "danger"> = {
+  payment_pending: "warning",
+  payment_confirmed: "primary",
+  seller_contacted: "primary",
+  item_delivered: "primary",
+  inspection_pending: "warning",
+  accepted: "success",
+  rejected: "danger",
+  disputed: "danger",
+  payout_pending: "warning",
+  payout_completed: "success",
+  completed: "success",
+  refund_pending: "warning",
+  refund_completed: "success",
+};
+
 export default function PurchasesPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,19 +57,6 @@ export default function PurchasesPage() {
     }
     fetchPurchases();
   }, []);
-
-  const statusColor: Record<string, string> = {
-    payment_pending:
-      "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-    payment_confirmed:
-      "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-    accepted:
-      "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-    completed:
-      "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-    rejected:
-      "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-  };
 
   const statusLabel: Record<string, string> = {
     payment_pending: "Payment Pending",
@@ -67,69 +75,75 @@ export default function PurchasesPage() {
   };
 
   return (
-    <div>
+    <div className="animate-fade-in">
       <h1 className="mb-6 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
         My Purchases
       </h1>
 
       {loading ? (
-        <div className="py-20 text-center text-zinc-500">Loading...</div>
-      ) : transactions.length === 0 ? (
-        <div className="py-20 text-center text-zinc-500">
-          <p>You haven&apos;t made any purchases yet.</p>
-          <Link
-            href="/products"
-            className="mt-4 inline-block text-sm font-medium text-zinc-900 hover:underline dark:text-zinc-50"
-          >
-            Browse products
-          </Link>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
         </div>
+      ) : transactions.length === 0 ? (
+        <EmptyState
+          icon="cart"
+          title="No purchases yet"
+          description="You haven't made any purchases yet. Browse the marketplace to find items."
+          action={
+            <Button href="/products">
+              <ShoppingBag className="h-4 w-4" />
+              Browse Products
+            </Button>
+          }
+        />
       ) : (
         <div className="space-y-4">
           {transactions.map((tx) => (
             <Link
               key={tx.id}
               href={`/transaction/${tx.id}`}
-              className="flex items-center gap-4 rounded-lg border border-zinc-200 bg-white p-4 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+              className="block"
             >
-              <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-zinc-100 dark:bg-zinc-900">
-                {tx.product?.images?.[0] ? (
-                  <Image
-                    src={tx.product.images[0].imageUrl}
-                    alt={tx.product.title}
-                    fill
-                    className="object-cover"
-                    sizes="64px"
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-xs text-zinc-400">
-                    No img
+              <Card hover padding="none" className="overflow-hidden">
+                <div className="flex items-center gap-4 p-4">
+                  <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-900">
+                    {tx.product?.images?.[0] ? (
+                      <Image
+                        src={tx.product.images[0].imageUrl}
+                        alt={tx.product.title}
+                        fill
+                        className="object-cover"
+                        sizes="64px"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-xs text-zinc-400">
+                        No img
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                  {tx.product?.title || `Transaction #${tx.id}`}
-                </p>
-                <p className="text-xs text-zinc-500">
-                  {new Date(tx.createdAt).toLocaleDateString()}
-                </p>
-                {tx.product?.condition && (
-                  <p className="text-xs text-zinc-400">
-                    {formatCondition(tx.product.condition)}
-                  </p>
-                )}
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                  {formatPrice(tx.totalAmount)}
-                </p>
-                <span
-                  className={`inline-block mt-1 rounded-full px-2 py-0.5 text-xs font-medium ${statusColor[tx.status] ?? "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"}`}
-                >
-                  {statusLabel[tx.status] ?? tx.status}
-                </span>
-              </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                      {tx.product?.title || `Transaction #${tx.id}`}
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      {new Date(tx.createdAt).toLocaleDateString()}
+                    </p>
+                    {tx.product?.condition && (
+                      <p className="text-xs text-zinc-400">
+                        {formatCondition(tx.product.condition)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                      {formatPrice(tx.totalAmount)}
+                    </p>
+                    <Badge variant={statusVariantMap[tx.status] || "default"} size="sm" className="mt-1">
+                      {statusLabel[tx.status] ?? tx.status}
+                    </Badge>
+                  </div>
+                </div>
+              </Card>
             </Link>
           ))}
         </div>

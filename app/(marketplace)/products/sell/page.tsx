@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { CATEGORIES, CONDITIONS } from "@/lib/utils";
 import { Tag, Camera, Upload, X, Loader2, Info } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
-import { formatPrice } from "@/lib/utils";
 
 export default function SellPage() {
   const router = useRouter();
@@ -312,20 +311,20 @@ export default function SellPage() {
                   <div className="flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
                     <span>Your listing price</span>
                     <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                      {formatPrice(price)}
+                      ₦{(price).toLocaleString()}
                     </span>
                   </div>
                   <div className="mt-1 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
                     <span>Platform fee (10%)</span>
                     <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                      {formatPrice(Math.round(price * 0.1))}
+                      ₦{Math.round(price * 0.1).toLocaleString()}
                     </span>
                   </div>
                   <div className="mt-2 border-t border-zinc-200 pt-2 dark:border-zinc-700">
                     <div className="flex justify-between text-xs font-bold text-zinc-900 dark:text-zinc-50">
                       <span>Buyer pays</span>
                       <span className="text-indigo-600 dark:text-indigo-400">
-                        {formatPrice(price + Math.round(price * 0.1))}
+                        ₦{(price + Math.round(price * 0.1)).toLocaleString()}
                       </span>
                     </div>
                   </div>

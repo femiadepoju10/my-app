@@ -10,6 +10,7 @@ export async function GET() {
   }
 
   const allUsers = await db.users.findMany({
+    where: { deletedAt: null },
     select: {
       id: true,
       name: true,
@@ -73,6 +74,36 @@ export async function PATCH(req: Request) {
   await db.users.update({
     where: { id: parsedUserId },
     data: { role },
+  });
+
+  return NextResponse.json({ success: true });
+}
+
+export async function DELETE(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = await req.json();
+  const { userId } = body;
+
+  if (!userId) {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  const parsedUserId = parseInt(userId, 10);
+  if (isNaN(parsedUserId)) {
+    return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
+  }
+
+  if (parsedUserId === parseInt(session.user.id)) {
+    return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 });
+  }
+
+  await db.users.update({
+    where: { id: parsedUserId },
+    data: { deletedAt: new Date() },
   });
 
   return NextResponse.json({ success: true });

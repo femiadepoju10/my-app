@@ -4,6 +4,12 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { formatPrice } from "@/lib/utils";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Separator } from "@/components/ui/Separator";
+import EmptyState from "@/components/ui/EmptyState";
+import { Eye } from "lucide-react";
 
 export default async function AdminRefundsPage() {
   const session = await getServerSession(authOptions);
@@ -30,79 +36,82 @@ export default async function AdminRefundsPage() {
   });
 
   return (
-    <div>
+    <div className="animate-fade-in">
       <h1 className="mb-6 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
         Refund Management
       </h1>
 
-      <div className="space-y-4">
-        {refunds.map((refund) => (
-          <div
-            key={refund.id}
-            className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                  Refund #{refund.id}
-                </h3>
-                <p className="mt-1 text-sm text-zinc-500">
-                  Transaction: #{refund.transaction.id}
-                </p>
-                {refund.transaction.product && (
-                  <p className="text-sm text-zinc-500">
-                    Product: {refund.transaction.product.title}
-                  </p>
+      {refunds.length === 0 ? (
+        <Card padding="lg">
+          <EmptyState
+            icon="inbox"
+            title="No refunds found"
+            description="Refund requests will appear here when buyers reject items and refunds are initiated."
+          />
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {refunds.map((refund) => (
+            <Card key={refund.id} padding="none" className="overflow-hidden">
+              <div className="p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                        Refund #{refund.id}
+                      </h3>
+                      <Badge variant={refund.status === "completed" ? "success" : "warning"} size="sm">
+                        {refund.status}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-sm text-zinc-500">
+                      Transaction: <Link href={`/transaction/${refund.transaction.id}`} className="font-medium text-indigo-600 hover:underline dark:text-indigo-400">#{refund.transaction.id}</Link>
+                    </p>
+                    {refund.transaction.product && (
+                      <p className="text-sm text-zinc-500">
+                        Product: <span className="font-medium text-zinc-700 dark:text-zinc-300">{refund.transaction.product.title}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <Separator className="my-4" />
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Refund Amount</p>
+                    <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-zinc-50">
+                      {formatPrice(refund.amount)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Transaction Total</p>
+                    <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-zinc-50">
+                      {formatPrice(refund.transaction.totalAmount)}
+                    </p>
+                  </div>
+                </div>
+
+                {refund.reason && (
+                  <div className="mt-4">
+                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Reason</p>
+                    <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">{refund.reason}</p>
+                  </div>
                 )}
-              </div>
-              <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                refund.status === "completed"
-                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                  : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-              }`}>
-                {refund.status}
-              </span>
-            </div>
 
-            <div className="mt-4 flex gap-6">
-              <div>
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Amount:</p>
-                <p className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
-                  {formatPrice(refund.amount)}
-                </p>
+                <div className="mt-4 flex gap-2">
+                  <Link href={`/transaction/${refund.transaction.id}`}>
+                    <Button size="sm" variant="outline">
+                      <Eye className="h-4 w-4" />
+                      View Transaction
+                    </Button>
+                  </Link>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Transaction Total:</p>
-                <p className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
-                  {formatPrice(refund.transaction.totalAmount)}
-                </p>
-              </div>
-            </div>
-
-            {refund.reason && (
-              <div className="mt-3">
-                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Reason:</p>
-                <p className="text-sm text-zinc-600 dark:text-zinc-400">{refund.reason}</p>
-              </div>
-            )}
-
-            <div className="mt-4 flex gap-2">
-              <Link
-                href={`/transaction/${refund.transaction.id}`}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-              >
-                View Transaction
-              </Link>
-            </div>
-          </div>
-        ))}
-
-        {refunds.length === 0 && (
-          <div className="py-20 text-center text-zinc-500">
-            No refunds found
-          </div>
-        )}
-      </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -6,6 +6,9 @@ import Link from "next/link";
 import ProductCard from "@/components/products/ProductCard";
 import { ProductCardSkeleton } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { CATEGORIES, CONDITIONS } from "@/lib/utils";
 import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, Tag } from "lucide-react";
 
@@ -141,17 +144,14 @@ function MarketplaceContent() {
             className="w-full rounded-xl border border-zinc-200 bg-white py-2.5 pl-10 pr-3 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
           />
         </div>
-        <button
-          type="submit"
-          className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
-        >
+        <Button type="submit">
           <Search className="h-4 w-4" />
           Search
-        </button>
+        </Button>
       </form>
 
       {/* Filters */}
-      <div className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+      <Card padding="md" className="mb-6">
         <div className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
           <SlidersHorizontal className="h-4 w-4" />
           Filters
@@ -216,14 +216,12 @@ function MarketplaceContent() {
         {activeFilters.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {activeFilters.map((f, i) => (
-              <button
-                key={i}
-                onClick={f.onRemove}
-                className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400"
-              >
-                {f.label}
-                <X className="h-3 w-3" />
-              </button>
+              <Badge key={i} variant="primary" size="sm" className="gap-1 pr-1">
+                <button onClick={f.onRemove} className="flex items-center gap-1">
+                  {f.label}
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
             ))}
             <button
               onClick={clearFilters}
@@ -233,7 +231,7 @@ function MarketplaceContent() {
             </button>
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Results count */}
       {!loading && (
@@ -257,19 +255,13 @@ function MarketplaceContent() {
             ? "Try adjusting your filters or search terms to find what you're looking for."
             : "Be the first to list an item on the marketplace."}
           action={hasActiveFilters ? (
-            <button
-              onClick={clearFilters}
-              className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
-            >
+            <Button onClick={clearFilters}>
               Clear filters
-            </button>
+            </Button>
           ) : (
-            <Link
-              href="/products/sell"
-              className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
-            >
+            <Button href="/products/sell">
               Sell an item
-            </Link>
+            </Button>
           )}
         />
       ) : (
@@ -283,25 +275,27 @@ function MarketplaceContent() {
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="mt-8 flex items-center justify-center gap-2">
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="flex items-center gap-1 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 <ChevronLeft className="h-4 w-4" />
                 Previous
-              </button>
+              </Button>
               <span className="px-4 py-2 text-sm text-zinc-500 dark:text-zinc-400">
                 Page {page} of {totalPages}
               </span>
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                className="flex items-center gap-1 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
                 Next
                 <ChevronRight className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
           )}
         </>

@@ -1,6 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { User, Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
 
 interface UserProfile {
   id: number;
@@ -79,36 +84,58 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="max-w-lg">
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {message && (
-          <div className={`rounded-lg p-3 text-sm ${message.type === "success" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400" : "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400"}`}>
-            {message.text}
+    <div className="animate-fade-in max-w-lg">
+      <Card padding="lg">
+        <div className="mb-6 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
+            <User className="h-5 w-5" />
           </div>
-        )}
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Name</label>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50" />
+          <div>
+            <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">Profile</h1>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Manage your account settings</p>
+          </div>
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Email</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50" />
-        </div>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {message && (
+            <Badge variant={message.type === "success" ? "success" : "danger"}>
+              {message.text}
+            </Badge>
+          )}
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Phone</label>
-          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="08012345678" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50" />
-        </div>
+          <Input
+            label="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
 
-        <div className="flex items-center gap-4">
-          <button type="submit" disabled={saving} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200">
-            {saving ? "Saving..." : "Save Changes"}
-          </button>
-          <span className="text-xs text-zinc-500">Role: {user.role} | Member since {new Date(user.createdAt).toLocaleDateString()}</span>
-        </div>
-      </form>
+          <Input
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+
+          <Input
+            label="Phone"
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="08012345678"
+          />
+
+          <div className="flex items-center justify-between pt-2">
+            <Button type="submit" isLoading={saving}>
+              {saving ? "Saving..." : "Save Changes"}
+            </Button>
+            <span className="text-xs text-zinc-500">
+              Role: {user.role} | Member since {new Date(user.createdAt).toLocaleDateString()}
+            </span>
+          </div>
+        </form>
+      </Card>
     </div>
   );
 }

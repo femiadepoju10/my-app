@@ -19,6 +19,7 @@ model users {
   resetToken              String?   @map("reset_token")
   resetTokenExpiry        String?   @map("reset_token_expiry")
   createdAt               DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
+  deletedAt               DateTime? @map("deleted_at")
 
   productsSold            products[]          @relation("sellerProducts")
   buyerTransactions       transactions[]      @relation("transactionBuyer")
