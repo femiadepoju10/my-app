@@ -29,7 +29,7 @@ function getStartOfLastWeek(date: Date) {
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) return null;
-  const userId = parseInt(session.user.id);
+  const userId = session.user.id;
 
   const now = new Date();
   const thisWeekStart = getStartOfWeek(now);

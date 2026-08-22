@@ -12,15 +12,15 @@ import { Badge } from "@/components/ui/Badge";
 import { Separator } from "@/components/ui/Separator";
 
 interface TransactionData {
-  id: number;
-  buyerId: number;
-  sellerId: number;
+  id: string;
+  buyerId: string;
+  sellerId: string;
   itemPrice: number;
   serviceFee: number;
   totalAmount: number;
   status: string;
   product: {
-    id: number;
+    id: string;
     title: string;
     images: { imageUrl: string }[];
   } | null;
@@ -69,7 +69,7 @@ function CheckoutContent() {
       const data = await res.json();
       const tx = data.transaction;
 
-      if (tx && tx.buyerId !== parseInt(session.user.id)) {
+      if (tx && tx.buyerId !== session.user.id) {
         router.push("/products");
         return;
       }

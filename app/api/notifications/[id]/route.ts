@@ -13,9 +13,9 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const notificationId = parseInt(id, 10);
+  const notificationId = id;
 
-  if (isNaN(notificationId)) {
+  if (!notificationId) {
     return NextResponse.json({ error: "Invalid notification ID" }, { status: 400 });
   }
 
@@ -27,7 +27,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Notification not found" }, { status: 404 });
   }
 
-  if (notification.userId !== parseInt(session.user.id)) {
+  if (notification.userId !== session.user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -49,9 +49,9 @@ export async function GET(
   }
 
   const { id } = await params;
-  const notificationId = parseInt(id, 10);
+  const notificationId = id;
 
-  if (isNaN(notificationId)) {
+  if (!notificationId) {
     return NextResponse.json({ error: "Invalid notification ID" }, { status: 400 });
   }
 
@@ -63,7 +63,7 @@ export async function GET(
     return NextResponse.json({ error: "Notification not found" }, { status: 404 });
   }
 
-  if (notification.userId !== parseInt(session.user.id)) {
+  if (notification.userId !== session.user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

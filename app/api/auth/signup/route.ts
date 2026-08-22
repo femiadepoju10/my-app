@@ -85,14 +85,14 @@ export async function POST(req: Request) {
 
     console.log("[Signup] User created:", { userId: newUser.id, email: newUser.email });
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
     sendVerificationEmail(email, name, verificationToken, baseUrl).catch((err) => {
       console.error("[Signup] Failed to send verification email:", err);
     });
     sendWelcomeEmail(email, name).catch((err) => {
       console.error("[Signup] Failed to send welcome email:", err);
     });
-    createNotification(newUser.id, "registration", "Welcome to Skillbridge! Your account has been created successfully.").catch((err) => {
+    createNotification(newUser.id, "registration", "Welcome to PassitOn! Your account has been created successfully.").catch((err) => {
       console.error("[Signup] Failed to create notification:", err);
     });
 

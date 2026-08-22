@@ -23,9 +23,9 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const disputeId = parseInt(id, 10);
+  const disputeId = id;
 
-  if (isNaN(disputeId)) {
+  if (!disputeId) {
     return NextResponse.json({ error: "Invalid dispute ID" }, { status: 400 });
   }
 
@@ -94,9 +94,9 @@ export async function GET(
   }
 
   const { id } = await params;
-  const disputeId = parseInt(id, 10);
+  const disputeId = id;
 
-  if (isNaN(disputeId)) {
+  if (!disputeId) {
     return NextResponse.json({ error: "Invalid dispute ID" }, { status: 400 });
   }
 
@@ -127,7 +127,7 @@ export async function GET(
     return NextResponse.json({ error: "Dispute not found" }, { status: 404 });
   }
 
-  const userId = parseInt(session.user.id);
+  const userId = session.user.id;
   const isAdmin = session.user.role === "admin";
   const isBuyer = dispute.transaction.buyerId === userId;
   const isSeller = dispute.transaction.sellerId === userId;

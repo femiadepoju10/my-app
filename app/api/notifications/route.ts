@@ -42,7 +42,7 @@ export async function GET(req: Request) {
   const offset = (page - 1) * limit;
   const unreadOnly = searchParams.get("unread") === "true";
 
-  const userId = parseInt(session.user.id);
+  const userId = session.user.id;
   const where: Record<string, unknown> = { userId };
   if (unreadOnly) {
     where.readAt = null;

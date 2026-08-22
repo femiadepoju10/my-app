@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { z } from "zod";
 
 const createDisputeSchema = z.object({
-  transactionId: z.number().int().positive(),
+  transactionId: z.string().min(1, "Transaction ID is required"),
   reason: z.string().min(1, "Reason is required"),
   evidence: z.array(z.string()).max(5, "Maximum 5 images allowed").optional(),
 });
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   }
 
   const { transactionId, reason, evidence } = validated.data;
-  const userId = parseInt(session.user.id);
+  const userId = session.user.id;
 
   const transaction = await db.transactions.findUnique({
     where: { id: transactionId },
@@ -91,7 +91,7 @@ export async function GET(req: Request) {
   const limit = 20;
   const offset = (page - 1) * limit;
 
-  const userId = parseInt(session.user.id);
+  const userId = session.user.id;
   const isAdmin = session.user.role === "admin";
 
   const where = isAdmin

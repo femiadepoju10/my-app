@@ -20,3 +20,13 @@ Maintain the following files in `docs/`:
 - `docs/progress.md` — the tracking file. After every meaningful session, update step statuses (pending / in progress / done), the current phase marker, and append a short session log entry.
 
 All project documentation must follow the database principles in the global rule: UUID primary keys on every application-owned table, restrictive foreign keys (no cascades), forward-only migrations, and explicit cleanup through application code.
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Production build (includes `tsc` type-checking) |
+| `npx tsc --noEmit` | Run TypeScript type-checking only |
+| `npx tsx scripts/e2e-test.ts` | Run the end-to-end test suite (63 assertions covering the full transaction lifecycle incl. reviews, wishlist, chat, seller profiles, push subscriptions, SMS notifications, product recommendations, seller analytics, delivery tracking, and seller verification) |
+| `npx tsx scripts/security-test.ts` | Run the security test suite (91 assertions covering auth, isolation, race conditions, state machine, admin auth, payment security, payout security, review security, wishlist security, chat security, push security, SMS security, recommendations security, seller analytics security, delivery tracking security, and seller verification security) |

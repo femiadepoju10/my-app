@@ -25,7 +25,7 @@ export default async function AdminLayout({
   if (!session?.user) redirect("/login");
 
   const user = await db.users.findFirst({
-    where: { id: parseInt(session.user.id) },
+    where: { id: session.user.id },
     select: { role: true, name: true },
   });
 

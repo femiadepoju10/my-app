@@ -5,9 +5,11 @@ import NavTabs from "@/components/layout/NavTabs";
 
 const DASHBOARD_TABS = [
   { href: "/dashboard", label: "Overview", icon: "dashboard" as const },
+  { href: "/dashboard/analytics", label: "Analytics", icon: "analytics" as const },
   { href: "/dashboard/listings", label: "My Listings", icon: "listings" as const },
   { href: "/dashboard/purchases", label: "My Purchases", icon: "purchases" as const },
   { href: "/dashboard/sales", label: "My Sales", icon: "sales" as const },
+  { href: "/dashboard/wishlist", label: "Wishlist", icon: "wishlist" as const },
   { href: "/dashboard/notifications", label: "Notifications", icon: "notifications" as const },
   { href: "/dashboard/profile", label: "Profile", icon: "profile" as const },
 ];

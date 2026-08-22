@@ -41,7 +41,7 @@ export async function POST(req: Request) {
     data: { verificationToken: token, verificationTokenExpiry: expiry },
   });
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
   await sendVerificationEmail(user.email, user.name, token, baseUrl);
 
   return NextResponse.json({ message: "Verification email sent" });

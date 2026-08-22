@@ -2,13 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { formatPrice, formatCondition } from "@/lib/utils";
+import ProductCard from "@/components/products/ProductCard";
 import {
   ArrowLeft, MapPin, Tag, Calendar, User, Shield, CreditCard,
   ShoppingCart, MessageSquare, Edit, Trash2, Loader2, ChevronRight, Package,
-  Heart, Share2, Bell, CheckCircle,
+   Share2, Bell, CheckCircle, Star, ShieldCheck,
 } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/Button";
@@ -16,20 +18,27 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Separator } from "@/components/ui/Separator";
 import { Avatar } from "@/components/ui/Avatar";
+import { WishlistButton } from "@/components/wishlist/WishlistButton";
 
 interface ProductImage {
   imageUrl: string;
 }
 
-interface Seller {
-  id: number;
-  name: string;
-  createdAt: string;
+ interface Seller {
+   id: string;
+   name: string;
+   createdAt: string;
+   sellerVerificationStatus?: string | null;
+ }
+
+interface SellerRating {
+  average: number;
+  count: number;
 }
 
 interface Product {
-  id: number;
-  sellerId: number;
+  id: string;
+  sellerId: string;
   title: string;
   description: string;
   category: string;
@@ -38,8 +47,22 @@ interface Product {
   location: string;
   status: string;
   createdAt: string;
-  images: ProductImage[];
-  seller: Seller;
+   images: ProductImage[];
+   seller: Seller;
+   sellerRating?: SellerRating;
+}
+
+interface Recommendation {
+  id: string;
+  title: string;
+  price: number;
+  image: string | null;
+  seller: { id: string; name: string };
+  sellerRating: { average: number; count: number };
+  wishlistCount: number;
+  condition?: string;
+  location?: string;
+  status?: string;
 }
 
 export default function ProductDetailsPage() {
@@ -51,32 +74,72 @@ export default function ProductDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [buying, setBuying] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [recentProducts, setRecentProducts] = useState<Recommendation[]>([]);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function fetchProduct() {
-      const res = await fetch(`/api/products/${params.id}`);
-      if (cancelled) return;
-      if (!res.ok) {
-        router.push("/products");
-        return;
-      }
-      try {
-        const data = await res.json();
-        if (!cancelled) {
-          setProduct(data.product);
-        }
-      } catch {
-        if (!cancelled) {
-          router.push("/products");
-        }
-        return;
-      }
-      if (!cancelled) setLoading(false);
-    }
-    fetchProduct();
-    return () => { cancelled = true; };
-  }, [params.id, router]);
+   useEffect(() => {
+     let cancelled = false;
+     const productId = params.id as string;
+
+     async function fetchProduct() {
+       const res = await fetch(`/api/products/${params.id}`);
+       if (cancelled) return;
+       if (!res.ok) {
+         router.push("/products");
+         return;
+       }
+       try {
+         const data = await res.json();
+         if (!cancelled) {
+           setProduct(data.product);
+
+           const viewed: string[] = JSON.parse(localStorage.getItem("recentlyViewed") || "[]");
+           if (!viewed.includes(productId)) {
+             const updated = [productId, ...viewed.filter((id: string) => id !== productId)].slice(0, 10);
+             localStorage.setItem("recentlyViewed", JSON.stringify(updated));
+           }
+         }
+       } catch {
+         if (!cancelled) {
+           router.push("/products");
+         }
+         return;
+       }
+       if (!cancelled) setLoading(false);
+     }
+     fetchProduct();
+
+     async function fetchRecommendations() {
+       try {
+         const res = await fetch(`/api/products/${params.id}/recommendations`);
+         if (res.ok && !cancelled) {
+           const data = await res.json();
+           setRecommendations(data.recommendations || []);
+         }
+       } catch {
+         if (!cancelled) setRecommendations([]);
+       }
+     }
+     fetchRecommendations();
+
+     async function fetchRecentProducts() {
+       const viewed: string[] = JSON.parse(localStorage.getItem("recentlyViewed") || "[]");
+       const otherIds = viewed.filter((id: string) => id !== productId).slice(0, 4);
+       if (otherIds.length === 0) return;
+       try {
+         const res = await fetch(`/api/products?ids=${otherIds.join(",")}`);
+         if (res.ok && !cancelled) {
+           const data = await res.json();
+           setRecentProducts(data.products || []);
+         }
+       } catch {
+         if (!cancelled) setRecentProducts([]);
+       }
+     }
+     fetchRecentProducts();
+
+     return () => { cancelled = true; };
+   }, [params.id, router]);
 
   if (loading) {
     return (
@@ -141,16 +204,10 @@ export default function ProductDetailsPage() {
               )}
             </div>
             <div className="absolute right-3 top-3 flex gap-2">
+              <WishlistButton productId={product.id} size="md" />
               <button
                 type="button"
-                onClick={() => addToast("Added to wishlist", "success")}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-zinc-400 transition-colors hover:text-red-500 dark:bg-zinc-900/90"
-              >
-                <Heart className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => addToast("Link copied to clipboard", "success")}
+                onClick={() => navigator.clipboard.writeText(window.location.href)}
                 className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-zinc-400 transition-colors hover:text-indigo-600 dark:bg-zinc-900/90"
               >
                 <Share2 className="h-4 w-4" />
@@ -214,12 +271,27 @@ export default function ProductDetailsPage() {
                 size="lg"
               />
               <div className="flex-1">
-                <p className="font-semibold text-zinc-900 dark:text-zinc-50">
-                  {product.seller.name}
-                </p>
+                <Link
+                  href={`/seller/${product.seller.id}`}
+                  className="font-semibold text-zinc-900 hover:text-indigo-600 dark:text-zinc-50 dark:hover:text-indigo-400 transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                   {product.seller.name}
+                   {product.seller.sellerVerificationStatus === "verified" && (
+                     <ShieldCheck className="ml-1 h-4 w-4 text-emerald-500" />
+                   )}
+                 </Link>
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">
                   Seller · Member since {new Date(product.seller.createdAt).getFullYear()}
                 </p>
+                {product.sellerRating && product.sellerRating.count > 0 && (
+                  <div className="mt-1 flex items-center gap-1">
+                    <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                    <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                      {product.sellerRating.average} ({product.sellerRating.count} review{product.sellerRating.count === 1 ? "" : "s"})
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300">
                 <Shield className="h-3 w-3" />
@@ -356,22 +428,60 @@ export default function ProductDetailsPage() {
         </div>
       </div>
 
-      {/* Related Products Placeholder */}
-      <div className="mt-16">
-        <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">Related Products</h2>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">You might also be interested in these items</p>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-              <div className="aspect-square rounded-xl bg-zinc-100 dark:bg-zinc-900" />
-              <div className="mt-3 space-y-2">
-                <div className="h-4 w-3/4 rounded bg-zinc-100 dark:bg-zinc-800" />
-                <div className="h-5 w-1/3 rounded bg-indigo-100 dark:bg-indigo-900/30" />
+      {/* Recommendations Section */}
+      {(recommendations.length > 0 || recentProducts.length > 0) && (
+        <div className="mt-16 space-y-12">
+          {recentProducts.length > 0 && (
+            <div>
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">Recently Viewed</h2>
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Products you recently browsed</p>
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {recentProducts.map((rec: Recommendation) => (
+                  <ProductCard
+                    key={rec.id}
+                    product={{
+                      id: rec.id,
+                      title: rec.title,
+                      price: rec.price,
+                      condition: rec.condition || "used",
+                      location: rec.location || "",
+                      status: rec.status || "active",
+                      images: rec.image ? [{ imageUrl: rec.image }] : [],
+                      seller: { id: rec.seller?.id || "", name: rec.seller?.name || "" },
+                      sellerRating: { average: rec.sellerRating?.average || 0, count: rec.sellerRating?.count || 0 },
+                    }}
+                  />
+                ))}
               </div>
             </div>
-          ))}
+          )}
+
+          {recommendations.length > 0 && (
+            <div>
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">You May Also Like</h2>
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Similar items in the same category</p>
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {recommendations.map((rec: Recommendation) => (
+                  <ProductCard
+                    key={rec.id}
+                    product={{
+                      id: rec.id,
+                      title: rec.title,
+                      price: rec.price,
+                      condition: "used",
+                      location: rec.location || "",
+                      status: "active",
+                      images: rec.image ? [{ imageUrl: rec.image }] : [],
+                      seller: { id: rec.seller?.id || "", name: rec.seller?.name || "" },
+                      sellerRating: { average: rec.sellerRating.average, count: rec.sellerRating.count },
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
       {/* Sticky Mobile CTA */}
       {!isOwner && product.status === "active" && (

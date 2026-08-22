@@ -4,7 +4,7 @@ import { formatPrice } from "@/lib/utils";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const FROM = "Skillbridge <onboarding@resend.dev>";
+const FROM = "PassitOn <onboarding@resend.dev>";
 
 async function sendEmail(to: string, subject: string, html: string) {
   if (process.env.NODE_ENV === "development") {
@@ -25,12 +25,12 @@ function emailWrapper(title: string, body: string): string {
       <h2 style="color: #18181b; margin-bottom: 8px;">${title}</h2>
       <div style="color: #52525b; font-size: 14px; line-height: 1.6;">${body}</div>
       <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 24px 0;" />
-      <p style="color: #a1a1aa; font-size: 12px;">Skillbridge — Secure Marketplace</p>
+      <p style="color: #a1a1aa; font-size: 12px;">PassitOn — Secure Marketplace</p>
     </div>
   `;
 }
 
-async function getTransactionData(transactionId: number) {
+async function getTransactionData(transactionId: string) {
   const tx = await db.transactions.findUnique({
     where: { id: transactionId },
   });
@@ -53,7 +53,7 @@ async function getTransactionData(transactionId: number) {
 }
 
 export async function sendTransactionEmail(
-  transactionId: number,
+  transactionId: string,
   type: string
 ) {
   const data = await getTransactionData(transactionId);
@@ -118,7 +118,7 @@ export async function sendTransactionEmail(
         "You've Been Paid!",
         `<p>Hi ${seller?.name},</p>
          <p>Your payout of <strong>${formatPrice(tx.itemPrice)}</strong> for <strong>${productName}</strong> has been completed.</p>
-         <p>Thank you for selling on Skillbridge!</p>`
+          <p>Thank you for selling on PassitOn!</p>`
       );
       break;
 
@@ -130,6 +130,39 @@ export async function sendTransactionEmail(
         `<p>Hi ${buyer?.name},</p>
          <p>Your refund of <strong>${formatPrice(tx.totalAmount)}</strong> for <strong>${productName}</strong> has been processed.</p>
          <p>The funds will be returned to your original payment method.</p>`
+      );
+      break;
+
+    case "payout_initiated":
+      to = seller?.email || "";
+      subject = `Payout Initiated — ${formatPrice(tx.itemPrice)}`;
+      html = emailWrapper(
+        "Payout Initiated",
+        `<p>Hi ${seller?.name},</p>
+         <p>Your payout of <strong>${formatPrice(tx.itemPrice)}</strong> for <strong>${productName}</strong> has been initiated.</p>
+         <p>The funds will be transferred to your bank account shortly.</p>`
+      );
+      break;
+
+    case "refund_initiated":
+      to = buyer?.email || "";
+      subject = `Refund Initiated — ${formatPrice(tx.totalAmount)}`;
+      html = emailWrapper(
+        "Refund Initiated",
+        `<p>Hi ${buyer?.name},</p>
+         <p>Your refund of <strong>${formatPrice(tx.totalAmount)}</strong> for <strong>${productName}</strong> is being processed.</p>
+         <p>You will receive a confirmation once the refund is completed.</p>`
+      );
+      break;
+
+    case "refund_failed":
+      to = buyer?.email || "";
+      subject = `Refund Failed — Please Contact Support`;
+      html = emailWrapper(
+        "Refund Failed",
+        `<p>Hi ${buyer?.name},</p>
+         <p>We attempted to process your refund of <strong>${formatPrice(tx.totalAmount)}</strong> for <strong>${productName}</strong>, but it failed.</p>
+         <p>Please contact our support team for assistance. Your transaction has been flagged for manual review.</p>`
       );
       break;
 
@@ -169,7 +202,7 @@ export async function sendPasswordResetEmail(
   try {
     await sendEmail(
       email,
-      "Reset your Skillbridge password",
+      "Reset your PassitOn password",
       emailWrapper(
         "Reset Your Password",
         `<p>Hi ${name},</p>
@@ -188,11 +221,11 @@ export async function sendWelcomeEmail(email: string, name: string) {
   try {
     await sendEmail(
       email,
-      "Welcome to Skillbridge!",
-      emailWrapper(
-        "Welcome to Skillbridge!",
-        `<p>Hi ${name},</p>
-         <p>Welcome to Skillbridge! Your account has been created successfully.</p>
+      "Welcome to PassitOn!",
+       emailWrapper(
+         "Welcome to PassitOn!",
+         `<p>Hi ${name},</p>
+          <p>Welcome to PassitOn! Your account has been created successfully.</p>
          <p>You can now browse products, make purchases, and start selling.</p>
          <p>If you have any questions, feel free to reach out to our support team.</p>`
       )
@@ -212,11 +245,11 @@ export async function sendVerificationEmail(
   try {
     await sendEmail(
       email,
-      "Verify your Skillbridge email",
-      emailWrapper(
-        "Verify Your Email",
-        `<p>Hi ${name},</p>
-         <p>Welcome to Skillbridge! Please verify your email address by clicking the link below:</p>
+      "Verify your PassitOn email",
+       emailWrapper(
+         "Verify Your Email",
+         `<p>Hi ${name},</p>
+          <p>Welcome to PassitOn! Please verify your email address by clicking the link below:</p>
          <p><a href="${verifyUrl}" style="display:inline-block;background:#18181b;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;">Verify Email</a></p>
          <p>This link expires in 24 hours.</p>
          <p>If you didn't create an account, you can safely ignore this email.</p>`

@@ -9,12 +9,14 @@ import {
   DollarSign,
   User,
   Bell,
+  Heart,
+  BarChart3,
 } from "lucide-react";
 
 interface NavTab {
   href: string;
   label: string;
-  icon?: "dashboard" | "listings" | "purchases" | "sales" | "notifications" | "profile";
+  icon?: "dashboard" | "listings" | "purchases" | "sales" | "wishlist" | "notifications" | "profile" | "analytics";
 }
 
 const iconMap = {
@@ -22,8 +24,10 @@ const iconMap = {
   listings: Package,
   purchases: ShoppingCart,
   sales: DollarSign,
+  wishlist: Heart,
   notifications: Bell,
   profile: User,
+  analytics: BarChart3,
 };
 
 export default function NavTabs({ tabs }: { tabs: NavTab[] }) {

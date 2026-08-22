@@ -7,18 +7,24 @@ datasource db {
 }
 
 model users {
-  id                      Int       @id @default(autoincrement())
+  id                      String    @id @default(uuid())
   name                    String
   email                   String    @unique
-  phone                   String?
-  passwordHash            String    @map("password_hash")
+   phone                   String?
+   bio                     String?   @db.VarChar(500)
+   passwordHash            String    @map("password_hash")
   role                    String    @default("user")
-  emailVerified           String?   @map("email_verified")
+   paystackRecipientCode   String?   @map("paystack_recipient_code")
+   smsEnabled             Boolean   @default(false) @map("sms_enabled")
+   emailVerified           String?   @map("email_verified")
   verificationToken       String?   @map("verification_token")
   verificationTokenExpiry String?   @map("verification_token_expiry")
-  resetToken              String?   @map("reset_token")
-  resetTokenExpiry        String?   @map("reset_token_expiry")
-  createdAt               DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
+   resetToken              String?   @map("reset_token")
+   resetTokenExpiry        String?   @map("reset_token_expiry")
+   sellerVerificationStatus String?  @map("seller_verification_status")
+   verificationNote        String?   @db.VarChar(500) @map("verification_note")
+   verifiedAt              DateTime? @map("verified_at")
+   createdAt               DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
   deletedAt               DateTime? @map("deleted_at")
 
   productsSold            products[]          @relation("sellerProducts")
@@ -26,14 +32,19 @@ model users {
   sellerTransactions      transactions[]      @relation("transactionSeller")
   payoutsReceived         payouts[]
   disputesOpened          disputes[]
+  reviewsWritten          reviews[]           @relation("reviewsWritten")
+  reviewsReceived         reviews[]           @relation("reviewsReceived")
   notifications           notifications[]
+  wishlists               wishlists[]
+  sentMessages            messages[]
+  pushSubscription        push_subscriptions?
 
   @@map("users")
 }
 
 model products {
-  id          Int       @id @default(autoincrement())
-  sellerId    Int       @map("seller_id")
+  id          String    @id @default(uuid())
+  sellerId    String    @map("seller_id")
   title       String
   description String
   category    String
@@ -47,19 +58,21 @@ model products {
   seller       users            @relation("sellerProducts", fields: [sellerId], references: [id])
   images       productImages[]
   transactions transactions[]
+  wishlists    wishlists[]
 
   @@index([sellerId])
   @@index([status])
   @@index([category])
   @@index([createdAt])
+  @@index([category, status])
   @@map("products")
 }
 
 model productImages {
-  id        Int    @id @default(autoincrement())
-  productId Int    @map("product_id")
-  imageUrl  String @map("image_url")
-  sortOrder Int    @default(0) @map("sort_order")
+  id        String   @id @default(uuid())
+  productId String   @map("product_id")
+  imageUrl  String   @map("image_url")
+  sortOrder Int      @default(0) @map("sort_order")
 
   product products @relation(fields: [productId], references: [id], onDelete: Cascade)
 
@@ -68,27 +81,30 @@ model productImages {
 }
 
 model transactions {
-  id           Int             @id @default(autoincrement())
-  productId    Int             @map("product_id")
-  buyerId      Int             @map("buyer_id")
-  sellerId     Int             @map("seller_id")
-  itemPrice    Int             @map("item_price")
-  serviceFee   Int             @map("service_fee")
-  totalAmount  Int             @map("total_amount")
-  status       TransactionStatus @default(payment_pending)
-  createdAt    DateTime        @default(now()) @db.Timestamptz(6) @map("created_at")
-  updatedAt    DateTime        @default(now()) @db.Timestamptz(6) @map("updated_at")
-  rejectionReason String?      @map("rejection_reason")
-  rejectionPhotos String?      @map("rejection_photos")
-  disputeNote     String?      @map("dispute_note")
+  id               String            @id @default(uuid())
+  productId        String            @map("product_id")
+  buyerId          String            @map("buyer_id")
+  sellerId         String            @map("seller_id")
+  itemPrice        Int               @map("item_price")
+  serviceFee       Int               @map("service_fee")
+  totalAmount      Int               @map("total_amount")
+  status           TransactionStatus @default(payment_pending)
+  createdAt        DateTime          @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt        DateTime          @default(now()) @db.Timestamptz(6) @map("updated_at")
+  rejectionReason  String?           @map("rejection_reason")
+  rejectionPhotos  String?           @map("rejection_photos")
+  disputeNote      String?           @map("dispute_note")
 
-  product    products    @relation(fields: [productId], references: [id])
-  buyer      users       @relation("transactionBuyer", fields: [buyerId], references: [id])
-  seller     users       @relation("transactionSeller", fields: [sellerId], references: [id])
+  product    products     @relation(fields: [productId], references: [id])
+  buyer      users        @relation("transactionBuyer", fields: [buyerId], references: [id])
+  seller     users        @relation("transactionSeller", fields: [sellerId], references: [id])
   payments   payments[]
   payouts    payouts[]
   refunds    refunds[]
-  disputes   disputes?
+   disputes   disputes?
+   reviews    reviews?
+   messages   messages[]
+   deliveryTracking DeliveryTracking?
 
   @@index([buyerId])
   @@index([sellerId])
@@ -98,13 +114,13 @@ model transactions {
 }
 
 model payments {
-  id              Int          @id @default(autoincrement())
-  transactionId   Int          @map("transaction_id")
-  paystackRef     String       @unique @map("paystack_ref")
+  id              String          @id @default(uuid())
+  transactionId   String          @map("transaction_id")
+  paystackRef     String          @unique @map("paystack_ref")
   amount          Int
-  status          PaymentStatus @default(pending)
-  gatewayResponse String?      @map("gateway_response")
-  paidAt          String?      @map("paid_at")
+  status          PaymentStatus   @default(pending)
+  gatewayResponse String?         @map("gateway_response")
+  paidAt          String?         @map("paid_at")
 
   transaction transactions @relation(fields: [transactionId], references: [id])
 
@@ -113,9 +129,9 @@ model payments {
 }
 
 model payouts {
-  id            Int         @id @default(autoincrement())
-  transactionId Int         @map("transaction_id")
-  sellerId      Int         @map("seller_id")
+  id            String      @id @default(uuid())
+  transactionId String      @map("transaction_id")
+  sellerId      String      @map("seller_id")
   amount        Int
   status        PayoutStatus @default(pending)
   paystackRef   String?     @map("paystack_ref")
@@ -130,8 +146,8 @@ model payouts {
 }
 
 model refunds {
-  id            Int         @id @default(autoincrement())
-  transactionId Int         @map("transaction_id")
+  id            String      @id @default(uuid())
+  transactionId String      @map("transaction_id")
   amount        Int
   reason        String?
   status        RefundStatus @default(pending)
@@ -145,14 +161,14 @@ model refunds {
 }
 
 model disputes {
-  id          Int           @id @default(autoincrement())
-  transactionId Int         @unique @map("transaction_id")
-  openedById  Int           @map("opened_by_id")
-  reason      String
-  evidence    String?
-  status      DisputeStatus @default(open)
-  resolution  String?
-  createdAt   DateTime      @default(now()) @db.Timestamptz(6) @map("created_at")
+  id            String        @id @default(uuid())
+  transactionId String        @unique @map("transaction_id")
+  openedById    String        @map("opened_by_id")
+  reason        String
+  evidence      String?
+  status        DisputeStatus @default(open)
+  resolution    String?
+  createdAt     DateTime      @default(now()) @db.Timestamptz(6) @map("created_at")
 
   transaction transactions @relation(fields: [transactionId], references: [id])
   openedBy    users         @relation(fields: [openedById], references: [id])
@@ -162,18 +178,106 @@ model disputes {
   @@map("disputes")
 }
 
+model DeliveryTracking {
+  id            String         @id @default(uuid())
+  transactionId String         @unique @map("transaction_id")
+  status        DeliveryStatus @default(shipping)
+  shippedAt     DateTime?      @map("shipped_at")
+  shippedNote   String?        @map("shipped_note")
+  deliveredAt   DateTime?      @map("delivered_at")
+  deliveredNote String?        @map("delivered_note")
+  proofPhoto    String?        @map("proof_photo")
+  createdAt     DateTime       @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt     DateTime       @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  transaction transactions @relation(fields: [transactionId], references: [id])
+
+  @@map("delivery_tracking")
+}
+
+enum DeliveryStatus {
+  shipping
+  in_transit
+  delivered
+  confirmed
+}
+
 model notifications {
-  id        Int       @id @default(autoincrement())
-  userId    Int       @map("user_id")
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
   type      String
   message   String
-  readAt    String?   @map("read_at")
-  createdAt DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
+  readAt    String?  @map("read_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
 
   user users @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@map("notifications")
+}
+
+model reviews {
+  id            String   @id @default(uuid())
+  transactionId String   @unique @map("transaction_id")
+  reviewerId    String   @map("reviewer_id")
+  revieweeId    String   @map("reviewee_id")
+  rating        Int
+  comment       String?
+  createdAt     DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  transaction transactions @relation(fields: [transactionId], references: [id])
+  reviewer    users        @relation("reviewsWritten", fields: [reviewerId], references: [id])
+  reviewee    users        @relation("reviewsReceived", fields: [revieweeId], references: [id])
+
+  @@index([transactionId])
+  @@index([reviewerId])
+  @@index([revieweeId])
+  @@map("reviews")
+}
+
+model wishlists {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  productId String   @map("product_id")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  user    users    @relation(fields: [userId], references: [id])
+  product products @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
+  @@map("wishlists")
+}
+
+model messages {
+  id        String   @id @default(uuid())
+  transactionId String @map("transaction_id")
+  senderId    String @map("sender_id")
+  message     String @db.VarChar(2000)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  transaction transactions @relation(fields: [transactionId], references: [id])
+  sender      users       @relation(fields: [senderId], references: [id])
+
+  @@index([transactionId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@map("messages")
+}
+
+model push_subscriptions {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  endpoint  String   @db.Text
+  keys      Json
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  user users @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 enum ProductCondition {

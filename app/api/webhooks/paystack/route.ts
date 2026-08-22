@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { verifyWebhookSignature, verifyTransaction } from "@/lib/paystack";
 import { sendTransactionEmail } from "@/lib/email";
+import { notifyTransactionParticipants } from "@/lib/notifications";
 
 export async function POST(req: Request) {
   const body = await req.text();
@@ -65,7 +66,7 @@ export async function POST(req: Request) {
         );
       }
 
-      const txId = Number(transactionIdFromMeta);
+      const txId = String(transactionIdFromMeta);
 
       await db.$transaction(async (tx) => {
         const transaction = await tx.transactions.findUnique({
@@ -117,6 +118,7 @@ export async function POST(req: Request) {
       });
 
       sendTransactionEmail(txId, "payment_confirmed").catch(() => {});
+      notifyTransactionParticipants(txId, "payment_confirmed").catch(() => {});
 
       return NextResponse.json({ received: true });
     } catch (error) {
@@ -125,6 +127,155 @@ export async function POST(req: Request) {
         { error: "Webhook processing failed" },
         { status: 500 }
       );
+    }
+  }
+
+  if (event.event === "transfer.success") {
+    const { reference, amount, transferred_at } = event.data || {};
+    if (!reference) {
+      return NextResponse.json({ error: "Missing transfer reference" }, { status: 400 });
+    }
+
+    try {
+      const payout = await db.payouts.findFirst({
+        where: { paystackRef: reference },
+      });
+
+      if (!payout) {
+        return NextResponse.json({ received: true });
+      }
+
+      if (payout.status === "completed") {
+        return NextResponse.json({ received: true });
+      }
+
+      await db.$transaction(async (tx) => {
+        await tx.payouts.update({
+          where: { id: payout.id },
+          data: {
+            status: "completed",
+            paidAt: transferred_at || new Date().toISOString(),
+          },
+        });
+
+        const txn = await tx.transactions.findUnique({
+          where: { id: payout.transactionId },
+          select: { productId: true },
+        });
+
+        if (txn) {
+          await tx.products.update({
+            where: { id: txn.productId },
+            data: { status: "sold" },
+          });
+        }
+
+        await tx.transactions.update({
+          where: { id: payout.transactionId },
+          data: {
+            status: "completed",
+            updatedAt: new Date().toISOString(),
+          },
+        });
+      });
+
+      sendTransactionEmail(payout.transactionId, "payout_completed").catch(() => {});
+      notifyTransactionParticipants(payout.transactionId, "payout_completed").catch(() => {});
+
+      return NextResponse.json({ received: true });
+    } catch (error) {
+      console.error("Transfer webhook error:", error);
+      return NextResponse.json({ received: true });
+    }
+  }
+
+  if (event.event === "transfer.failed") {
+    const { reference } = event.data || {};
+    if (!reference) {
+      return NextResponse.json({ received: true });
+    }
+
+    try {
+      await db.payouts.updateMany({
+        where: { paystackRef: reference },
+        data: { status: "failed" },
+      });
+      return NextResponse.json({ received: true });
+    } catch (error) {
+      console.error("Transfer failed webhook error:", error);
+      return NextResponse.json({ received: true });
+    }
+  }
+
+  if (event.event === "refund.processed" || event.event === "refund.failed") {
+    const { reference } = event.data || {};
+    if (!reference) {
+      return NextResponse.json({ received: true });
+    }
+
+    const isFailed = event.event === "refund.failed";
+
+    try {
+      const refund = await db.refunds.findFirst({
+        where: { paystackRef: reference },
+      });
+
+      if (!refund) {
+        return NextResponse.json({ received: true });
+      }
+
+      if (isFailed) {
+        if (refund.status === "failed") {
+          return NextResponse.json({ received: true });
+        }
+        await db.refunds.update({
+          where: { id: refund.id },
+          data: { status: "failed" },
+        });
+        notifyTransactionParticipants(refund.transactionId, "refund_failed").catch(() => {});
+        return NextResponse.json({ received: true });
+      }
+
+      if (refund.status === "completed") {
+        return NextResponse.json({ received: true });
+      }
+
+      await db.$transaction(async (tx) => {
+        await tx.refunds.update({
+          where: { id: refund.id },
+          data: {
+            status: "completed",
+            createdAt: new Date().toISOString(),
+          },
+        });
+
+        await tx.transactions.update({
+          where: { id: refund.transactionId },
+          data: {
+            status: "refund_completed",
+            updatedAt: new Date().toISOString(),
+          },
+        });
+
+        const txn = await tx.transactions.findUnique({
+          where: { id: refund.transactionId },
+          select: { productId: true },
+        });
+        if (txn) {
+          await tx.products.update({
+            where: { id: txn.productId },
+            data: { status: "active" },
+          });
+        }
+      });
+
+      sendTransactionEmail(refund.transactionId, "refund_completed").catch(() => {});
+      notifyTransactionParticipants(refund.transactionId, "refund_completed").catch(() => {});
+
+      return NextResponse.json({ received: true });
+    } catch (error) {
+      console.error("Refund webhook error:", error);
+      return NextResponse.json({ received: true });
     }
   }
 

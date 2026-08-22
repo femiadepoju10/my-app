@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import { db } from "@/lib/db";
+import { getSellerRatings } from "@/lib/analytics";
 import { z } from "zod";
 
 const productSchema = z.object({
@@ -18,7 +19,8 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") || "";
   const category = searchParams.get("category") || "";
-  const sort = searchParams.get("sort") || "newest";
+   const sort = searchParams.get("sort") || "newest";
+   const ids = searchParams.get("ids") || "";
   const mine = searchParams.get("mine") === "true";
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
   const minPrice = parseInt(searchParams.get("minPrice") || "0", 10) || 0;
@@ -29,15 +31,20 @@ export async function GET(req: Request) {
 
   const where: Record<string, unknown> = {};
 
-  if (mine) {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    where.sellerId = parseInt(session.user.id);
-  } else {
-    where.status = "active";
-  }
+   if (mine) {
+     const session = await getServerSession(authOptions);
+     if (!session?.user) {
+       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+     }
+     where.sellerId = session.user.id;
+   } else if (ids) {
+     const idList = ids.split(",").filter(Boolean);
+     if (idList.length > 0) {
+       where.id = { in: idList };
+     }
+   } else {
+     where.status = "active";
+   }
 
   if (search) {
     where.title = { contains: search };
@@ -91,7 +98,7 @@ export async function GET(req: Request) {
       })
     : [];
 
-  const imagesByProduct = new Map<number, typeof allImages>();
+  const imagesByProduct = new Map<string, typeof allImages>();
   for (const img of allImages) {
     const existing = imagesByProduct.get(img.productId) || [];
     existing.push(img);
@@ -103,8 +110,17 @@ export async function GET(req: Request) {
     images: imagesByProduct.get(item.id) || [],
   }));
 
+  const sellerIds = Array.from(new Set(items.map((i) => i.sellerId)));
+  const sellerRatings = sellerIds.length > 0
+    ? await getSellerRatings(sellerIds)
+    : [];
+  const ratingMap = new Map(sellerRatings.map((r) => [r.sellerId, { average: r.average, count: r.count }]));
+
   return NextResponse.json({
-    products: itemsWithImages,
+    products: itemsWithImages.map((item) => ({
+      ...item,
+      sellerRating: ratingMap.get(item.sellerId) ?? { average: 0, count: 0 },
+    })),
     total: countResult,
     resultsCount: countResult,
     page,
@@ -123,30 +139,41 @@ export async function POST(req: Request) {
     const validated = productSchema.parse(body);
 
     const product = await db.$transaction(async (tx) => {
-      const newProduct = await tx.products.create({
-        data: {
-          sellerId: parseInt(session.user.id),
-          title: validated.title,
-          description: validated.description,
-          category: validated.category,
-          condition: validated.condition,
-          price: validated.price,
-          location: validated.location,
-        },
-      });
+       const existingProductCount = await tx.products.count({
+         where: { sellerId: session.user.id },
+       });
 
-      if (validated.images.length > 0) {
-        await tx.productImages.createMany({
-          data: validated.images.map((url, index) => ({
-            productId: newProduct.id,
-            imageUrl: url,
-            sortOrder: index,
-          })),
-        });
-      }
+       const newProduct = await tx.products.create({
+         data: {
+           sellerId: session.user.id,
+           title: validated.title,
+           description: validated.description,
+           category: validated.category,
+           condition: validated.condition,
+           price: validated.price,
+           location: validated.location,
+         },
+       });
 
-      return newProduct;
-    });
+       if (validated.images.length > 0) {
+         await tx.productImages.createMany({
+           data: validated.images.map((url, index) => ({
+             productId: newProduct.id,
+             imageUrl: url,
+             sortOrder: index,
+           })),
+         });
+       }
+
+       if (existingProductCount === 0) {
+         await tx.users.update({
+           where: { id: session.user.id },
+           data: { sellerVerificationStatus: "pending" },
+         });
+       }
+
+       return newProduct;
+     });
 
     return NextResponse.json({ product }, { status: 201 });
   } catch (error) {
