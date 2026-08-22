@@ -11,12 +11,15 @@ import {
   Bell,
   Heart,
   BarChart3,
+  Trophy,
+  Shield,
+  Rocket,
 } from "lucide-react";
 
 interface NavTab {
   href: string;
   label: string;
-  icon?: "dashboard" | "listings" | "purchases" | "sales" | "wishlist" | "notifications" | "profile" | "analytics";
+  icon?: "dashboard" | "listings" | "purchases" | "sales" | "wishlist" | "notifications" | "profile" | "analytics" | "loyalty" | "kyc" | "sponsored";
 }
 
 const iconMap = {
@@ -28,6 +31,9 @@ const iconMap = {
   notifications: Bell,
   profile: User,
   analytics: BarChart3,
+  loyalty: Trophy,
+  kyc: Shield,
+  sponsored: Rocket,
 };
 
 export default function NavTabs({ tabs }: { tabs: NavTab[] }) {

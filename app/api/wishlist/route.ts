@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import { db } from "@/lib/db";
+import { awardPoints } from "@/lib/loyalty";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -17,6 +18,7 @@ export async function GET() {
           id: true,
           title: true,
           price: true,
+          currency: true,
           condition: true,
           location: true,
           status: true,
@@ -63,6 +65,9 @@ export async function POST(req: Request) {
     const wishlist = await db.wishlists.create({
       data: { userId: session.user.id, productId },
     });
+    awardPoints(session.user.id, 5, "wishlist").catch((err) =>
+      console.error("[Loyalty] Failed to award wishlist points:", err)
+    );
     return NextResponse.json({ success: true, wishlist });
   } catch {
     return NextResponse.json(

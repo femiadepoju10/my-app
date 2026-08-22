@@ -12,6 +12,7 @@ const updateProductSchema = z.object({
   category: z.string().min(1).optional(),
   condition: z.enum(["new", "like_new", "good", "fair", "used"]).optional(),
   price: z.number().int().min(1).optional(),
+  currency: z.enum(["NGN", "GHS", "KES", "ZAR", "USD"]).optional(),
   location: z.string().min(2).max(200).optional(),
   images: z.array(z.string()).min(1).max(5).optional(),
 });

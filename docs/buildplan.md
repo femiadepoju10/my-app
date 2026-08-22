@@ -799,12 +799,13 @@ To prevent scope creep, the following should **not be implemented in the first v
 | Sponsored listings                | V2.0           |
 | Advertising                       | V2.0           |
 | Auctions                          | V2.0           |
-| Multiple currencies               | V2.0           |
-| International transactions        | V2.0           |
+| Multiple currencies               | V2.0 (DONE)    |
+| Advanced dispute automation       | V2.0 (DONE)    |
+| Sponsored listings                | V2.0 (DONE)    |
 | Advanced fraud detection          | V2.0           |
 | Mobile applications               | V2.0           |
 | Loyalty programme                 | V2.0           |
-| Advanced dispute automation       | V2.0           |
+| International transactions        | V2.0           |
 
 ---
 

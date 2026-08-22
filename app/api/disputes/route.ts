@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
+import { processDisputeAutomation } from "@/lib/dispute-automation";
 
 const createDisputeSchema = z.object({
   transactionId: z.string().min(1, "Transaction ID is required"),
@@ -77,7 +78,20 @@ export async function POST(req: Request) {
     data: { status: "disputed", updatedAt: new Date().toISOString() },
   });
 
-  return NextResponse.json({ dispute }, { status: 201 });
+  const automation = await processDisputeAutomation(transactionId, reason);
+
+  const updatedDispute = await db.disputes.update({
+    where: { id: dispute.id },
+    data: {
+      autoTriageCategory: automation.autoTriageCategory,
+      riskScore: automation.riskScore,
+      suggestedResolution: automation.suggestedResolution,
+      autoResolved: automation.autoResolved,
+      autoResolvedAt: automation.autoResolvedAt,
+    },
+  });
+
+  return NextResponse.json({ dispute: updatedDispute }, { status: 201 });
 }
 
 export async function GET(req: Request) {

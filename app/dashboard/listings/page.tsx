@@ -18,6 +18,7 @@ interface Product {
   id: string;
   title: string;
   price: number;
+  currency?: string;
   condition: string;
   location: string;
   status: string;
@@ -118,7 +119,7 @@ export default function MyListingsPage() {
                     {product.title}
                   </Link>
                   <p className="mt-1 text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                    {formatPrice(product.price)}
+                     {formatPrice(product.price, product.currency)}
                   </p>
                   <div className="mt-1 flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
                     <span>{formatCondition(product.condition)}</span>

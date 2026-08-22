@@ -283,3 +283,155 @@
 - Updated `scripts/e2e-test.ts` — Phase 9k (3 seller verification assertions)
 - Updated `scripts/security-test.ts` — `testSellerVerificationSecurity` function (6 security assertions)
 - Final result: TypeScript: PASS | Build: PASS (51 pages) | E2E 63/63 | Security 91/91 PASS
+
+### 2026-08-22 (V2.0: Loyalty Programme)
+- Added `LoyaltySource` enum (`signup`, `purchase`, `sale`, `review`, `review_received`, `referral`, `wishlist`, `redemption`) to `prisma/schema.prisma`
+- Added `loyalty_events` model to schema (UUID PK, FK to `users` and `transactions`, `ON DELETE RESTRICT`, `points` Int, `source` String, `expiresAt` DateTime)
+- Added `loyaltyPointBalance` (Int default 0) and `loyaltyTier` (String default "bronze") to `users` model
+- Added `loyaltyEvents` relation on `transactions` model + FK index
+- Created forward-only migration `20260822000000_add_loyalty_tables`
+- Created `lib/loyalty-utils.ts` — pure functions (no DB dependency) extracted for safe client-side use: `calculateTier`, `pointsToDiscount` (1000:1 rate), `discountToPoints`, `calculateTierMultiplier` (gold 1.5x, silver 1.2x, bronze 1.0x), `LOYALTY_RATES`, tier constants
+- Created `lib/loyalty.ts` — DB-access functions: `awardPoints()` (atomic tx with expiry, tier recalculation), `redeemPoints()` (balance check, multiples of 10, negative event record), `getUserLoyalty()` (balance, tier, lifetime, recent events)
+- Awarded loyalty points from `app/api/auth/signup/route.ts`: 100 pts signup, 500 pts referral
+- Awarded loyalty points from `app/api/webhooks/paystack/route.ts`: 50 pts per $100 buyer + seller on transfer.success
+- Awarded loyalty points from `app/api/reviews/route.ts`: 25 pts reviewer, 10 pts reviewee if rating ≥ 4
+- Awarded loyalty points from `app/api/wishlist/route.ts`: 5 pts on wishlist add
+- Added points redemption at checkout: `app/api/transactions/route.ts` reads `loyaltyPoints` from client (capped), converts to discount via `pointsToDiscount()`, calls `redeemPoints()`, applies discount to `totalAmount`, requires minimum 500 points
+- Created `app/api/loyalty/route.ts` — authenticated GET endpoint returning user's loyalty summary (balance, tier, lifetime earned, recent 20 events)
+- Created `app/dashboard/loyalty/page.tsx` — loyalty dashboard with points balance, tier badge, redeemable value, earning guide, recent activity timeline (uses `lib/loyalty-utils` for no-client-DB-import)
+- Added loyalty badge (points + tier icon) to `components/layout/Header.tsx`
+- Added `Heart` icon to `components/layout/NavTabs.tsx` icon map for "Loyalty" nav tab
+- Added `Loyalty` tab to dashboard navigation
+- Updated `prisma.config.ts` — replaced hardcoded localhost DB URL with `process.env.DATABASE_URL` via dotenv (`.env.local`) for Vercel compatibility
+- Added `postbuild` script to `package.json`: `prisma migrate deploy` for Vercel
+- Updated E2E test Phase 9l — 4 loyalty assertions (signup points, tier calculation, purchase points, review points)
+- Updated E2E test cleanup — added `loyalty_events.deleteMany` before `transactions.deleteMany` and `users.deleteMany` (respects ON DELETE RESTRICT)
+- Added 6 loyalty security tests to `scripts/security-test.ts`
+- Updated `docs/security-test-report.md` with loyalty section
+- Final result: TypeScript: PASS | Build: PASS (53 pages) | E2E 67/67 | Security 97/97 PASS
+
+### 2026-08-22 (V2.0: KYC Identity Verification)
+- Added `kyc_documents` model to `prisma/schema.prisma` (UUID PK, `@unique userId`, `ON DELETE RESTRICT`, document type/number/image URL, selfie URL, status, admin note, submitted/reviewer timestamps)
+- Added `KycDocumentType` enum (passport, driver_license, national_id) and `KycStatus` enum (pending, verified, rejected)
+- Added `kycDocument` + `kycReviewed` relations to `users` model
+- Added `reviewer` relation to `kyc_documents` (admin who reviewed)
+- Created forward-only migration `20260822010000_add_kyc_documents`
+- Created `app/api/kyc/route.ts` — authenticated POST (submit KYC documents, prevents duplicate submissions, sets sellerVerificationStatus to pending) + GET (fetch user's KYC status)
+- Updated `app/api/admin/users/route.ts` PATCH — added `kycStatus` and `kycAdminNote` fields, atomically updates both `kyc_documents.status` and `users.sellerVerificationStatus`, sets `verifiedAt`/`reviewedAt`/`reviewerId`
+- Updated `app/api/admin/users/route.ts` GET — added `kycDocument` select with all KYC fields for admin review
+- Updated `app/api/user/profile/route.ts` GET — added `kycDocument` select (status, documentType, adminNote, timestamps) for profile display
+- Updated `app/api/upload/route.ts` — added configurable `folder` field (validated against whitelist: `skillbridge/products`, `skillbridge/kyc`)
+- Updated `app/api/products/route.ts` POST — KYC gating: unverified/rejected users cannot list products (403). KYC-verified users skip the "pending" first-listing auto-set
+- Created `app/dashboard/kyc/page.tsx` — full KYC dashboard with document type selector, ID number input, Cloudinary upload for ID doc + selfie, status display (not submitted / pending / verified / rejected with admin notes)
+- Added "KYC" tab to `app/dashboard/layout.tsx` DASHBOARD_TABS + `kyc` icon (Shield) to NavTabs icon map
+- Added KYC status card + "Start KYC Verification" button to `app/dashboard/profile/page.tsx`
+- Updated `app/admin/users/page.tsx` — added KYC status column, "Review KYC" button (opens modal with document/selfie previews, approve/reject decision, admin note), "Pending KYC Only" filter
+- Added Phase 9m to E2E tests (4 assertions: KYC creation, admin approval, status sync, rejection)
+- Added 7 KYC security tests (auth, duplicate prevention, server-side userId, admin role check, self-modification prevention, UUID PK + RESTRICT, @unique constraint)
+- Added KYC cleanup to E2E teardown (before users deletion)
+- Updated `docs/security-test-report.md` with KYC security section
+- Updated `AGENTS.md` with new test counts
+- Final result: TypeScript: PASS | Build: PASS (55 pages) | E2E 71/71 | Security 104/104 PASS
+
+### 2026-08-22 (V2.0: AI-Generated Product Descriptions)
+- Installed `openai` npm package
+- Added `OPENAI_API_KEY` env var to `.env.local` and `.env.example`
+- Created `lib/openai.ts` — OpenAI client wrapper with graceful degradation (returns null if API key not set)
+- Created `app/api/ai/generate-description/route.ts` — authenticated POST endpoint (Zod validates `imageUrls` array, 1-5 URLs, calls OpenAI GPT-4o-mini vision, returns generated description)
+- Updated `app/(marketplace)/products/sell/page.tsx` — added "Generate with AI" button on description field, populates textarea with AI-generated description (user can edit before submitting)
+- Updated `app/dashboard/listings/[id]/edit/page.tsx` — same AI generation button on edit page
+- Added Phase 9n to E2E tests (4 assertions: API endpoint exists, lib exists, requires auth, validates imageUrls array)
+- Added 3 AI security tests (auth required, validates z.array, does not persist descriptions to DB)
+  - Final result: TypeScript: PASS | Build: PASS (56 pages) | E2E 75/75 | Security 107/107 PASS
+
+### 2026-08-22 (V2.0: Multiple Currencies)
+- Added `Currency` enum (NGN, GHS, KES, ZAR, USD) to `prisma/schema.prisma`
+- Added `currency` column to `products`, `transactions`, and `payments` tables (default NGN) via forward-only migration `20260822020000_add_currency_support`
+- Created `lib/currency.ts` — CURRENCY_CONFIG map (code → symbol, locale, name), SUPPORTED_CURRENCIES array, getCurrencyConfig() helper
+- Updated `lib/utils.ts` `formatPrice(amount, currency?)` — now accepts optional currency param, uses Intl.NumberFormat with dynamic locale/currency code
+- Added `getCurrencySymbol(currency?)` helper to `lib/utils.ts`
+- Updated `lib/paystack.ts` `initializeTransaction()` — accepts optional `currency` param, passes to Paystack API (defaults to NGN)
+- Updated `app/api/transactions/route.ts` — transaction creation inherits product currency; GET includes currency in response
+- Updated `app/api/payments/webhook/route.ts` — stores currency from Paystack webhook payload on payment record
+- Updated `app/api/products/route.ts` — Zod schema validates currency via z.enum; create stores currency
+- Updated `app/api/products/[id]/route.ts` — PATCH schema accepts currency field
+- Updated `app/api/products/[id]/recommendations/route.ts` — includes currency in recommendation response
+- Updated `app/api/wishlist/route.ts` — includes currency in product select
+- Updated `app/api/sellers/[id]/route.ts` — includes currency in product select
+- Updated `app/api/admin/transactions/route.ts` — includes currency in select
+- Updated `app/(marketplace)/products/sell/page.tsx` — currency dropdown (NGN/GHS/KES/ZAR/USD), dynamic price symbol in preview
+- Updated `app/dashboard/listings/[id]/edit/page.tsx` — currency dropdown with loaded/save value, dynamic price label
+- Updated `app/checkout/[transactionId]/page.tsx` — TransactionData interface includes currency, formatPrice calls pass currency
+- Updated `app/transaction/[id]/page.tsx` — TransactionData interface includes currency, all formatPrice calls pass currency
+- Updated `app/(marketplace)/products/[id]/page.tsx` — Product/Recommendation interfaces include currency, all formatPrice calls pass currency
+- Updated `components/products/ProductCard.tsx` — Product interface includes currency, formatPrice passes currency
+- Updated `app/dashboard/sales/page.tsx`, `app/dashboard/purchases/page.tsx` — Transaction interface includes currency, formatPrice passes currency
+- Updated `app/dashboard/wishlist/page.tsx` — WishlistItem interface includes currency, formatPrice passes currency
+- Updated `app/dashboard/listings/page.tsx` — Product interface includes currency, formatPrice passes currency
+- Updated `app/seller/[id]/page.tsx` — SellerProfile interface includes currency, formatPrice passes currency
+- Updated `app/dashboard/analytics/page.tsx` — formatPrice calls default to NGN (aggregated stats)
+- Updated `app/admin/page.tsx`, `app/admin/transactions/page.tsx`, `app/admin/refunds/page.tsx`, `app/admin/disputes/page.tsx` — formatPrice defaults to NGN (admin views)
+- Updated `app/dashboard/page.tsx` — replaced hardcoded ₦ with formatPrice(totalRevenue, "NGN")
+- Updated `app/(marketplace)/products/page.tsx` — replaced hardcoded ₦ in price filter labels with getCurrencySymbol("NGN")
+- Updated `lib/email.ts` — all formatPrice calls now pass tx.currency
+- Added Phase 9o to E2E tests (4 assertions: GHS product creation, transaction currency inheritance, formatPrice signature, currency config exists)
+- Added 3 Multi-Currency security tests (Currency enum validation, Zod validation, Paystack integration)
+- Updated all existing test products/transactions with explicit currency: 'NGN'
+  - Final result: TypeScript: PASS | E2E 79/79 | Security 110/110 PASS
+
+### 2026-08-22 (V2.0: Advanced Dispute Automation)
+- Added `autoTriageCategory`, `riskScore`, `suggestedResolution`, `autoResolved`, `autoResolvedAt` columns to `disputes` model in `prisma/schema.prisma`
+- Created forward-only migration `20260822030000_add_dispute_automation`
+- Created `lib/dispute-automation.ts`:
+  - `DISPUTE_KEYWORD_RULES` — keyword mapping for 5 dispute categories (not_received, not_as_described, damaged, shipping_delay, other)
+  - `autoTriage(reason)` — classifies dispute reason by keyword matching
+  - `computeRiskScore(params)` — server-side async risk scoring (seller dispute history, seller completion count, dispute rate, transaction amount, buyer dispute frequency, buyer win rate)
+  - `suggestResolution(score, category)` — threshold-based suggestion (score ≤20 + clear category → auto-refund; score ≤35 + shipping_delay → partial refund; score ≥75 → manual review)
+  - `processDisputeAutomation(transactionId, reason)` — orchestrates the full pipeline
+- Updated `app/api/disputes/route.ts` POST — after dispute creation, calls `processDisputeAutomation` and stores results on the dispute record
+- Created `components/admin/ApplySuggestionButton.tsx` — client component for one-click resolution application via PATCH endpoint
+- Updated `app/admin/disputes/page.tsx`:
+  - Added filter buttons (High Risk, Needs Review, Auto-Resolved, Clear Filter)
+  - Added risk score badge (color-coded: green ≤20, yellow 21-50, red ≥50)
+  - Added auto-triage category display
+  - Added suggested resolution display
+  - Added "Auto-Resolved" status badge
+  - Added "Apply Suggestion" button for auto-resolvable disputes
+  - Now shows `currency` in transaction total (uses transaction's actual currency)
+- Added Phase 9p to E2E tests (6 assertions: lib exists, autoTriage function, suggestResolution function, schema fields)
+- Added 3 dispute automation security tests (server-side scoring, keyword matching without external API, threshold rules)
+- Final result: TypeScript: PASS | E2E 94/94 | Security 113/113 PASS
+
+## V2.0: Sponsored Listings
+
+### 2026-08-22
+- Added `SponsoredStatus` enum and `sponsored_listings` model to `prisma/schema.prisma` (UUID PK, unique productId, `@map` for all snake_case columns, `ON DELETE RESTRICT` FKs, no cascades)
+- Created forward-only migration `20260822040000_add_sponsored_listings`
+- Created `lib/sponsored-listings.ts`:
+  - `SPONSORED_PRICING` — fixed rate ₦500/day in NGN minor units
+  - `SPONSORED_DURATION_OPTIONS` — 1, 3, 7, 14 days
+  - `SPONSORED_DURATION_LABELS` — human-readable duration labels
+  - `calculateSponsoredAmount(durationDays)` — server-side price calculation
+  - `calculateSponsoredEndsAt(startsAt, durationDays)` — end date computation
+  - `getActiveSponsoredProductIds()` — returns IDs of active sponsored products
+  - `getActiveSponsoredListings()` — full listing with relations
+- Created `app/api/sponsored-listings/route.ts`:
+  - GET — lists seller's sponsored listings (authenticated)
+  - POST — creates sponsored listing, initializes Paystack transaction, returns payment link (server-defined amount, validates product ownership)
+- Created `app/api/sponsored-listings/verify/route.ts`:
+  - GET — verifies Paystack payment by reference, activates sponsored listing on success
+- Updated `app/api/products/route.ts` GET — boosts sponsored products to top of search results, includes `isSponsored` field in response
+- Updated `app/api/webhooks/paystack/route.ts` — handles `charge.success` for sponsored listing payments (activates listing when payment is verified)
+- Updated `components/products/ProductCard.tsx` — shows "Sponsored" badge with Sparkles icon
+- Updated `app/(marketplace)/products/sell/page.tsx` — adds boost modal after product creation with duration options and Paystack redirect
+- Created `app/dashboard/sponsored/page.tsx` — seller's sponsored listings dashboard with status cards, pending payment retry, and renewal CTA
+- Created `app/dashboard/sponsored/verify/page.tsx` — Paystack callback page that verifies payment and redirects to dashboard
+- Updated `app/admin/sponsored/page.tsx` — admin overview with revenue stats and all sponsored listings
+- Updated `app/admin/layout.tsx` — added "Sponsored" tab to admin nav
+- Updated `app/dashboard/layout.tsx` — added "Sponsored" tab to dashboard nav
+- Updated `components/layout/NavTabs.tsx` — added "rocket" icon option
+- Updated `components/ui/EmptyState.tsx` — added "rocket" icon option
+- Added Phase 9q to E2E tests (9 assertions: lib exists, calculateSponsoredAmount, getActiveSponsoredProductIds, schema model, schema enum, listing created pending, Paystack ref, activated after payment, appears in active list)
+- Added `testSponsoredListingsSecurity` to security tests (3 assertions: auth required, product ownership verified, server-defined amount)
+- Fixed pre-existing cleanup issue in E2E test (ghcTransaction was not being deleted)
+- Final result: TypeScript: PASS | E2E 94/94 PASS | Security 116/116 PASS

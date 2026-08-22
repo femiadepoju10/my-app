@@ -73,7 +73,7 @@ export async function sendTransactionEmail(
       html = emailWrapper(
         "Payment Confirmed",
         `<p>Hi ${buyer?.name},</p>
-         <p>Your payment of <strong>${formatPrice(tx.totalAmount)}</strong> for <strong>${productName}</strong> has been confirmed.</p>
+         <p>Your payment of <strong>${formatPrice(tx.totalAmount, tx.currency)}</strong> for <strong>${productName}</strong> has been confirmed.</p>
          <p>The seller has been notified and will arrange handover with you.</p>`
       );
       break;
@@ -85,7 +85,7 @@ export async function sendTransactionEmail(
         "Item Sold!",
         `<p>Hi ${seller?.name},</p>
          <p>Your item <strong>${productName}</strong> has been purchased!</p>
-         <p>Payment of <strong>${formatPrice(tx.totalAmount)}</strong> has been secured. Please contact the buyer to arrange handover.</p>`
+         <p>Payment of <strong>${formatPrice(tx.totalAmount, tx.currency)}</strong> has been secured. Please contact the buyer to arrange handover.</p>`
       );
       break;
 
@@ -107,50 +107,50 @@ export async function sendTransactionEmail(
         "Item Accepted",
         `<p>Hi ${seller?.name},</p>
          <p>The buyer has accepted <strong>${productName}</strong>.</p>
-         <p>Your payout of <strong>${formatPrice(tx.itemPrice)}</strong> is now being processed.</p>`
+         <p>Your payout of <strong>${formatPrice(tx.itemPrice, tx.currency)}</strong> is now being processed.</p>`
       );
       break;
 
     case "payout_completed":
       to = seller?.email || "";
-      subject = `Payout Completed — ${formatPrice(tx.itemPrice)}`;
+      subject = `Payout Completed — ${formatPrice(tx.itemPrice, tx.currency)}`;
       html = emailWrapper(
         "You've Been Paid!",
         `<p>Hi ${seller?.name},</p>
-         <p>Your payout of <strong>${formatPrice(tx.itemPrice)}</strong> for <strong>${productName}</strong> has been completed.</p>
+         <p>Your payout of <strong>${formatPrice(tx.itemPrice, tx.currency)}</strong> for <strong>${productName}</strong> has been completed.</p>
           <p>Thank you for selling on PassitOn!</p>`
       );
       break;
 
     case "refund_completed":
       to = buyer?.email || "";
-      subject = `Refund Processed — ${formatPrice(tx.totalAmount)}`;
+      subject = `Refund Processed — ${formatPrice(tx.totalAmount, tx.currency)}`;
       html = emailWrapper(
         "Refund Processed",
         `<p>Hi ${buyer?.name},</p>
-         <p>Your refund of <strong>${formatPrice(tx.totalAmount)}</strong> for <strong>${productName}</strong> has been processed.</p>
+         <p>Your refund of <strong>${formatPrice(tx.totalAmount, tx.currency)}</strong> for <strong>${productName}</strong> has been processed.</p>
          <p>The funds will be returned to your original payment method.</p>`
       );
       break;
 
     case "payout_initiated":
       to = seller?.email || "";
-      subject = `Payout Initiated — ${formatPrice(tx.itemPrice)}`;
+      subject = `Payout Initiated — ${formatPrice(tx.itemPrice, tx.currency)}`;
       html = emailWrapper(
         "Payout Initiated",
         `<p>Hi ${seller?.name},</p>
-         <p>Your payout of <strong>${formatPrice(tx.itemPrice)}</strong> for <strong>${productName}</strong> has been initiated.</p>
+         <p>Your payout of <strong>${formatPrice(tx.itemPrice, tx.currency)}</strong> for <strong>${productName}</strong> has been initiated.</p>
          <p>The funds will be transferred to your bank account shortly.</p>`
       );
       break;
 
     case "refund_initiated":
       to = buyer?.email || "";
-      subject = `Refund Initiated — ${formatPrice(tx.totalAmount)}`;
+      subject = `Refund Initiated — ${formatPrice(tx.totalAmount, tx.currency)}`;
       html = emailWrapper(
         "Refund Initiated",
         `<p>Hi ${buyer?.name},</p>
-         <p>Your refund of <strong>${formatPrice(tx.totalAmount)}</strong> for <strong>${productName}</strong> is being processed.</p>
+         <p>Your refund of <strong>${formatPrice(tx.totalAmount, tx.currency)}</strong> for <strong>${productName}</strong> is being processed.</p>
          <p>You will receive a confirmation once the refund is completed.</p>`
       );
       break;
@@ -161,7 +161,7 @@ export async function sendTransactionEmail(
       html = emailWrapper(
         "Refund Failed",
         `<p>Hi ${buyer?.name},</p>
-         <p>We attempted to process your refund of <strong>${formatPrice(tx.totalAmount)}</strong> for <strong>${productName}</strong>, but it failed.</p>
+         <p>We attempted to process your refund of <strong>${formatPrice(tx.totalAmount, tx.currency)}</strong> for <strong>${productName}</strong>, but it failed.</p>
          <p>Please contact our support team for assistance. Your transaction has been flagged for manual review.</p>`
       );
       break;

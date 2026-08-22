@@ -9,7 +9,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { CATEGORIES, CONDITIONS } from "@/lib/utils";
+import { CATEGORIES, CONDITIONS, getCurrencySymbol } from "@/lib/utils";
 import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight, Tag } from "lucide-react";
 
 interface ProductImage {
@@ -118,8 +118,8 @@ function MarketplaceContent() {
   if (search) activeFilters.push({ label: `"${search}"`, onRemove: () => setSearch("") });
   if (category) activeFilters.push({ label: category, onRemove: () => setCategory("") });
   if (condition) activeFilters.push({ label: CONDITIONS.find((c) => c.value === condition)?.label || condition, onRemove: () => setCondition("") });
-  if (minPrice) activeFilters.push({ label: `Min ₦${minPrice}`, onRemove: () => setMinPrice("") });
-  if (maxPrice) activeFilters.push({ label: `Max ₦${maxPrice}`, onRemove: () => setMaxPrice("") });
+  if (minPrice) activeFilters.push({ label: `Min ${getCurrencySymbol("NGN")}${minPrice}`, onRemove: () => setMinPrice("") });
+  if (maxPrice) activeFilters.push({ label: `Max ${getCurrencySymbol("NGN")}${maxPrice}`, onRemove: () => setMaxPrice("") });
 
   const selectClass =
     "rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-700 transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300";

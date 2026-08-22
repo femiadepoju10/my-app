@@ -11,16 +11,27 @@ import { Loader2, Search, UserPlus, Shield, Trash2, Banknote } from "lucide-reac
 import { useToast } from "@/components/ui/Toast";
 
  interface User {
-   id: string;
-   name: string;
-   email: string;
-   phone: string | null;
-   role: string;
-   paystackRecipientCode: string | null;
-   sellerVerificationStatus: string | null;
-   verificationNote: string | null;
-   createdAt: string;
-   transactionCount: number;
+    id: string;
+    name: string;
+    email: string;
+    phone: string | null;
+    role: string;
+    paystackRecipientCode: string | null;
+    sellerVerificationStatus: string | null;
+    verificationNote: string | null;
+    verifiedAt: string | null;
+    kycDocument: {
+      status: string;
+      documentType: string;
+      documentNumber: string | null;
+      documentImageUrl: string;
+      selfieImageUrl: string | null;
+      adminNote: string | null;
+      submittedAt: string;
+      reviewedAt: string | null;
+    } | null;
+    createdAt: string;
+    transactionCount: number;
 }
 
 const NIGERIAN_BANKS = [
@@ -49,9 +60,13 @@ export default function AdminUsersPage() {
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [payoutSetupUser, setPayoutSetupUser] = useState<User | null>(null);
+  const [kycReviewUser, setKycReviewUser] = useState<User | null>(null);
+  const [kycAction, setKycAction] = useState<"verified" | "rejected">("verified");
+  const [kycNote, setKycNote] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [bankCode, setBankCode] = useState("");
   const [showPendingOnly, setShowPendingOnly] = useState(false);
+  const [showPendingKycOnly, setShowPendingKycOnly] = useState(false);
   const { addToast } = useToast();
 
   useEffect(() => {
@@ -137,6 +152,54 @@ export default function AdminUsersPage() {
      }
    }
 
+  async function handleKycReview(userId: string, status: "verified" | "rejected") {
+    setKycAction(status);
+    setKycNote("");
+    const user = users.find((u) => u.id === userId);
+    if (user) setKycReviewUser(user);
+  }
+
+  async function submitKycReview() {
+    if (!kycReviewUser) return;
+    setActionLoading(kycReviewUser.id);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: kycReviewUser.id,
+          kycStatus: kycAction,
+          kycAdminNote: kycNote,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === kycReviewUser.id
+              ? {
+                  ...u,
+                  sellerVerificationStatus: kycAction,
+                  kycDocument: u.kycDocument
+                    ? { ...u.kycDocument, status: kycAction, adminNote: kycNote, reviewedAt: new Date().toISOString() }
+                    : null,
+                  verifiedAt: data.verifiedAt ?? null,
+                }
+              : u
+          )
+        );
+        addToast(`KYC ${kycAction}`, "success");
+        setKycReviewUser(null);
+        setKycNote("");
+      } else {
+        const data = await res.json();
+        addToast(data.error || "KYC review failed", "error");
+      }
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function handleVerification(userId: string, status: "verified" | "rejected", userName: string) {
     let note = "";
     if (status === "rejected") {
@@ -181,7 +244,10 @@ export default function AdminUsersPage() {
     const matchesFilter = showPendingOnly
       ? u.sellerVerificationStatus === "pending"
       : true;
-    return matchesSearch && matchesFilter;
+    const matchesKycFilter = showPendingKycOnly
+      ? u.kycDocument?.status === "pending"
+      : true;
+    return matchesSearch && matchesFilter && matchesKycFilter;
   });
 
   return (
@@ -199,7 +265,7 @@ export default function AdminUsersPage() {
             className="pl-9"
           />
         </div>
-        <div className="flex items-center gap-2">
+           <div className="flex items-center gap-2">
           <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
             <input
               type="checkbox"
@@ -208,6 +274,15 @@ export default function AdminUsersPage() {
               className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
             />
             Pending verification only
+          </label>
+          <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <input
+              type="checkbox"
+              checked={showPendingKycOnly}
+              onChange={(e) => setShowPendingKycOnly(e.target.checked)}
+              className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            Pending KYC only
           </label>
         </div>
       </div>
@@ -236,6 +311,7 @@ export default function AdminUsersPage() {
                <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Transactions</th>
                  <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Payout</th>
                 <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Verification</th>
+                <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">KYC</th>
                 <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Joined</th>
                <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Action</th>
               </tr>
@@ -279,74 +355,177 @@ export default function AdminUsersPage() {
                    <Badge variant="default" size="sm">—</Badge>
                  )}
                </td>
+                <td className="px-4 py-3">
+                  {user.kycDocument ? (
+                    <Badge
+                      variant={
+                        user.kycDocument.status === "verified"
+                          ? "success"
+                          : user.kycDocument.status === "pending"
+                          ? "warning"
+                          : "danger"
+                      }
+                      size="sm"
+                    >
+                      {user.kycDocument.status.charAt(0).toUpperCase() + user.kycDocument.status.slice(1)}
+                    </Badge>
+                  ) : (
+                    <Badge variant="default" size="sm">Not Submitted</Badge>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-zinc-500">{new Date(user.createdAt).toLocaleDateString()}</td>
-                  <td className="px-4 py-3">
-                   <div className="flex items-center gap-2">
-                     {user.sellerVerificationStatus === "pending" && (
-                       <div className="flex items-center gap-1">
-                         <Button
-                           variant="success"
-                           size="sm"
-                           onClick={() => handleVerification(user.id, "verified", user.name)}
-                           isLoading={actionLoading === user.id}
-                         >
-                           Verify
-                         </Button>
-                         <Button
-                           variant="destructive"
-                           size="sm"
-                           onClick={() => handleVerification(user.id, "rejected", user.name)}
-                           isLoading={actionLoading === user.id}
-                           outline
-                         >
-                           Reject
-                         </Button>
-                       </div>
-                     )}
-                     {user.sellerVerificationStatus === "rejected" && (
-                       <Button
-                         variant="outline"
-                         size="sm"
-                         onClick={() => handleVerification(user.id, "verified", user.name)}
-                         isLoading={actionLoading === user.id}
-                       >
-                         Re-verify
-                       </Button>
-                     )}
-                     {!user.paystackRecipientCode && (
-                       <Button
-                         variant="outline"
-                         size="sm"
-                         onClick={() => setPayoutSetupUser(user)}
-                       >
-                         <Banknote className="h-3 w-3" />
-                         Set Up Payout
-                       </Button>
-                     )}
-                     <Button
-                       variant={user.role === "admin" ? "destructive" : "primary"}
-                       size="sm"
-                       onClick={() => toggleRole(user.id, user.role, user.name)}
-                       isLoading={actionLoading === user.id}
-                     >
-                       <Shield className="h-3 w-3" />
-                       {user.role === "admin" ? "Demote" : "Promote"}
-                     </Button>
-                     <Button
-                       variant="destructive"
-                       size="sm"
-                       onClick={() => handleDelete(user.id, user.name)}
-                       isLoading={deleteLoading === user.id}
-                     >
-                       <Trash2 className="h-3 w-3" />
-                       Remove
-                     </Button>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    {user.sellerVerificationStatus === "pending" && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="success"
+                          size="sm"
+                          onClick={() => handleVerification(user.id, "verified", user.name)}
+                          isLoading={actionLoading === user.id}
+                        >
+                          Verify
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleVerification(user.id, "rejected", user.name)}
+                          isLoading={actionLoading === user.id}
+                          outline
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    )}
+                    {user.sellerVerificationStatus === "rejected" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleVerification(user.id, "verified", user.name)}
+                        isLoading={actionLoading === user.id}
+                      >
+                        Re-verify
+                      </Button>
+                    )}
+                    {user.kycDocument && user.kycDocument.status === "pending" && (
+                      <Button
+                        variant="warning"
+                        size="sm"
+                        onClick={() => handleKycReview(user.id, "verified")}
+                        isLoading={actionLoading === user.id}
+                      >
+                        Review KYC
+                      </Button>
+                    )}
+                    {!user.paystackRecipientCode && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPayoutSetupUser(user)}
+                      >
+                        <Banknote className="h-3 w-3" />
+                        Set Up Payout
+                      </Button>
+                    )}
+                    <Button
+                      variant={user.role === "admin" ? "destructive" : "primary"}
+                      size="sm"
+                      onClick={() => toggleRole(user.id, user.role, user.name)}
+                      isLoading={actionLoading === user.id}
+                    >
+                      <Shield className="h-3 w-3" />
+                      {user.role === "admin" ? "Demote" : "Promote"}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDelete(user.id, user.name)}
+                      isLoading={deleteLoading === user.id}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Remove
+                    </Button>
                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {kycReviewUser && kycReviewUser.kycDocument && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-2xl rounded-2xl bg-white dark:bg-zinc-900 p-6 shadow-xl">
+            <h3 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              KYC Review: {kycReviewUser.name}
+            </h3>
+            <div className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+              <p>Document Type: <strong>{kycReviewUser.kycDocument.documentType}</strong></p>
+              {kycReviewUser.kycDocument.documentNumber && (
+                <p>Document Number: <strong>{kycReviewUser.kycDocument.documentNumber}</strong></p>
+              )}
+              <p>Submitted: {new Date(kycReviewUser.kycDocument.submittedAt).toLocaleDateString()}</p>
+            </div>
+            <div className="mb-4 space-y-2">
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">ID Document:</p>
+              <img
+                src={kycReviewUser.kycDocument.documentImageUrl}
+                alt="ID Document"
+                className="max-h-48 w-full rounded-lg border border-zinc-200 dark:border-zinc-700 object-contain"
+              />
+            </div>
+            {kycReviewUser.kycDocument.selfieImageUrl && (
+              <div className="mb-4 space-y-2">
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Selfie:</p>
+                <img
+                  src={kycReviewUser.kycDocument.selfieImageUrl}
+                  alt="Selfie"
+                  className="max-h-48 w-48 rounded-lg border border-zinc-200 dark:border-zinc-700 object-contain"
+                />
+              </div>
+            )}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Admin Note (required for rejection)
+              </label>
+              <textarea
+                value={kycNote}
+                onChange={(e) => setKycNote(e.target.value)}
+                placeholder={kycAction === "rejected" ? "Reason for rejection..." : "Optional note..."}
+                rows={3}
+                className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            <div className="mt-6 flex gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setKycReviewUser(null);
+                  setKycNote("");
+                  setKycAction("verified");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => { setKycAction("rejected"); }}
+                className="mr-auto"
+              >
+                Set to Reject
+              </Button>
+              <Button
+                variant="success"
+                size="sm"
+                onClick={submitKycReview}
+                isLoading={actionLoading === kycReviewUser.id}
+              >
+                Confirm {kycAction === "verified" ? "Approval" : "Rejection"}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
       {payoutSetupUser && (

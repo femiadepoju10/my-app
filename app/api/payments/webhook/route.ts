@@ -48,6 +48,7 @@ export async function POST(req: Request) {
 
   const amountPaid = event.data?.amount;
   const expectedAmount = transaction.totalAmount;
+  const eventCurrency = event.data?.currency as string | undefined;
 
   if (amountPaid !== expectedAmount) {
     return NextResponse.json({ error: "Amount mismatch" }, { status: 400 });
@@ -64,6 +65,7 @@ export async function POST(req: Request) {
         status: "successful",
         paidAt: new Date().toISOString(),
         gatewayResponse: JSON.stringify(event.data),
+        currency: eventCurrency || transaction.currency,
       },
     });
   } else {
@@ -72,6 +74,7 @@ export async function POST(req: Request) {
         transactionId: transaction.id,
         paystackRef: reference,
         amount: expectedAmount,
+        currency: eventCurrency || transaction.currency,
         status: "successful",
         paidAt: new Date().toISOString(),
         gatewayResponse: JSON.stringify(event.data),

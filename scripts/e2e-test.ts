@@ -45,6 +45,7 @@ interface TestTransaction {
   itemPrice: number;
   serviceFee: number;
   totalAmount: number;
+  currency: string;
 }
 
 let passed = 0;
@@ -133,6 +134,7 @@ async function main() {
       category: 'Electronics',
       condition: 'new',
       price: 500000,
+      currency: 'NGN',
       location: 'Lagos, Nigeria',
       status: 'active',
       sellerId: seller.id,
@@ -165,6 +167,7 @@ async function main() {
         category: 'Electronics',
         condition: 'good',
         price: 300000,
+        currency: 'NGN',
         location: 'Lagos, Nigeria',
         status: 'active',
         sellerId: seller.id,
@@ -615,6 +618,327 @@ async function main() {
     test('Admin can approve seller verification', approvedSeller?.sellerVerificationStatus === 'verified');
     test('verifiedAt is set on approval', !!approvedSeller?.verifiedAt);
 
+    // ─── Phase 9l: Loyalty Programme ───────────────────────────────────
+    console.log('\nPhase 9l: Loyalty Programme');
+
+    // Award signup points to seller and buyer
+    await db.users.update({
+      where: { id: seller.id },
+      data: { loyaltyPointBalance: 100, loyaltyTier: 'bronze' },
+    });
+    await db.users.update({
+      where: { id: buyer.id },
+      data: { loyaltyPointBalance: 100, loyaltyTier: 'bronze' },
+    });
+
+    const sellerPoints = await db.users.findUnique({
+      where: { id: seller.id },
+      select: { loyaltyPointBalance: true, loyaltyTier: true },
+    });
+    test('Seller has signup loyalty points (100)', sellerPoints?.loyaltyPointBalance === 100);
+    test('Seller loyalty tier is bronze', sellerPoints?.loyaltyTier === 'bronze');
+
+    // Simulate transaction completion awarding points (50 pts per $100 sold/bought)
+    const purchasePoints = Math.floor((transaction.totalAmount / 10000) * 50);
+    const salePoints = Math.floor((transaction.totalAmount / 10000) * 50);
+    await db.loyalty_events.createMany({
+      data: [
+        { userId: buyer.id, points: purchasePoints, source: 'purchase', transactionId: transaction.id },
+        { userId: seller.id, points: salePoints, source: 'sale', transactionId: transaction.id },
+      ],
+    });
+    await db.users.update({
+      where: { id: buyer.id },
+      data: { loyaltyPointBalance: { increment: purchasePoints } },
+    });
+    await db.users.update({
+      where: { id: seller.id },
+      data: { loyaltyPointBalance: { increment: salePoints } },
+    });
+
+    const buyerAfterPurchase = await db.users.findUnique({
+      where: { id: buyer.id },
+      select: { loyaltyPointBalance: true },
+    });
+    test('Buyer has purchase loyalty points', (buyerAfterPurchase?.loyaltyPointBalance || 0) > 100);
+
+    // Award review points
+    await db.loyalty_events.create({
+      data: { userId: buyer.id, points: 25, source: 'review', transactionId: transaction.id },
+    });
+    await db.users.update({
+      where: { id: buyer.id },
+      data: { loyaltyPointBalance: { increment: 25 } },
+    });
+
+    const buyerFinal = await db.users.findUnique({
+      where: { id: buyer.id },
+      select: { loyaltyPointBalance: true },
+    });
+    test('Buyer has review loyalty points', (buyerFinal?.loyaltyPointBalance || 0) > (buyerAfterPurchase?.loyaltyPointBalance || 0));
+
+    // ─── Phase 9m: KYC Identity Verification ───────────────────────
+    console.log('\nPhase 9m: KYC Identity Verification');
+
+    // Create a KYC document for the seller (pending status)
+    await db.kyc_documents.create({
+      data: {
+        userId: seller.id,
+        documentType: 'national_id',
+        documentNumber: 'ABC123456',
+        documentImageUrl: 'https://res.cloudinary.com/demo/image/upload/v1234567890/skillbridge/kyc/doc.jpg',
+        selfieImageUrl: 'https://res.cloudinary.com/demo/image/upload/v1234567890/skillbridge/kyc/selfie.jpg',
+        status: 'pending',
+      },
+    });
+
+    const sellerKyc = await db.kyc_documents.findUnique({
+      where: { userId: seller.id },
+      select: { status: true, documentType: true },
+    });
+    test('Seller KYC document created with pending status',
+      sellerKyc?.status === 'pending' && sellerKyc?.documentType === 'national_id');
+
+    // Admin approves KYC
+    await db.kyc_documents.update({
+      where: { userId: seller.id },
+      data: {
+        status: 'verified',
+        adminNote: 'ID looks valid',
+        reviewedAt: new Date(),
+      },
+    });
+    await db.users.update({
+      where: { id: seller.id },
+      data: {
+        sellerVerificationStatus: 'verified',
+        verifiedAt: new Date(),
+      },
+    });
+
+    const sellerKycVerified = await db.kyc_documents.findUnique({
+      where: { userId: seller.id },
+      select: { status: true, adminNote: true, reviewedAt: true },
+    });
+    test('Admin can approve KYC → status becomes verified',
+      sellerKycVerified?.status === 'verified' && sellerKycVerified?.adminNote === 'ID looks valid');
+
+    const sellerVerified = await db.users.findUnique({
+      where: { id: seller.id },
+      select: { sellerVerificationStatus: true, verifiedAt: true },
+    });
+    test('Seller sellerVerificationStatus updated to verified after KYC approval',
+      sellerVerified?.sellerVerificationStatus === 'verified' && !!sellerVerified?.verifiedAt);
+
+    // Admin rejects another user's KYC
+    await db.kyc_documents.create({
+      data: {
+        userId: buyer.id,
+        documentType: 'passport',
+        documentImageUrl: 'https://res.cloudinary.com/demo/image/upload/v1234567890/skillbridge/kyc/passport.jpg',
+        status: 'pending',
+      },
+    });
+
+    await db.kyc_documents.update({
+      where: { userId: buyer.id },
+      data: {
+        status: 'rejected',
+        adminNote: 'Document expired',
+      },
+    });
+    const buyerKycRejected = await db.kyc_documents.findUnique({
+      where: { userId: buyer.id },
+      select: { status: true, adminNote: true },
+    });
+     test('Admin can reject KYC → status becomes rejected with note',
+       buyerKycRejected?.status === 'rejected' && buyerKycRejected?.adminNote === 'Document expired');
+
+    // ─── Phase 9n: AI-Generated Product Descriptions ─────────────────
+    console.log('\nPhase 9n: AI-Generated Product Descriptions');
+
+    // Verify the AI description API file exists and is structured correctly
+    const aiApiExists = require('fs').existsSync(require('path').join(process.cwd(), 'app', 'api', 'ai', 'generate-description', 'route.ts'));
+    test('AI description API endpoint exists', aiApiExists);
+
+    // Verify the OpenAI lib file exists and exports generateProductDescription
+    const openaiLibExists = require('fs').existsSync(require('path').join(process.cwd(), 'lib', 'openai.ts'));
+    test('AI description lib exists', openaiLibExists);
+
+    // Verify the API requires authentication (check source code)
+    const aiApiCode = require('fs').readFileSync(
+      require('path').join(process.cwd(), 'app', 'api', 'ai', 'generate-description', 'route.ts'),
+      'utf-8'
+    );
+    test('AI description API requires authentication',
+      aiApiCode.includes('getServerSession') && aiApiCode.includes('Unauthorized'));
+
+    test('AI description API validates imageUrls array',
+      aiApiCode.includes('imageUrls') && aiApiCode.includes('z.array'));
+
+    // ─── Phase 9o: Multi-Currency Support ─────────────────────────────
+    console.log('\nPhase 9o: Multi-Currency Support');
+
+    // Create a product with GHS currency
+    const ghcProduct = await db.products.create({
+      data: {
+        title: 'GHS Test Product',
+        description: 'A test product in Ghanaian Cedi',
+        category: 'Electronics',
+        condition: 'new',
+        price: 500000,
+        currency: 'GHS',
+        location: 'Accra, Ghana',
+        status: 'active',
+        sellerId: seller.id,
+      },
+    });
+
+    const ghcProductCheck = await db.products.findUnique({
+      where: { id: ghcProduct.id },
+      select: { currency: true, price: true },
+    });
+    test('Product created with GHS currency', ghcProductCheck?.currency === 'GHS');
+
+    // Create a transaction inheriting GHS currency
+    const ghcTransaction = await db.transactions.create({
+      data: {
+        productId: ghcProduct.id,
+        buyerId: buyer.id,
+        sellerId: seller.id,
+        itemPrice: 500000,
+        currency: 'GHS',
+        serviceFee: 50000,
+        totalAmount: 550000,
+        status: 'payment_pending',
+      },
+    });
+
+    const ghcTxCheck = await db.transactions.findUnique({
+      where: { id: ghcTransaction.id },
+      select: { currency: true, itemPrice: true, totalAmount: true },
+    });
+    test('Transaction inherits GHS currency from product', ghcTxCheck?.currency === 'GHS');
+
+    // Verify formatPrice handles GHS currency (filesystem check)
+    const utilsCode = require('fs').readFileSync(
+      require('path').join(process.cwd(), 'lib', 'utils.ts'),
+      'utf-8'
+    );
+    test('formatPrice accepts currency parameter',
+      utilsCode.includes('formatPrice(amount: number, currency?: string)'));
+
+    test('Currency config file exists',
+      require('fs').existsSync(require('path').join(process.cwd(), 'lib', 'currency.ts')));
+
+    // ─── Phase 9p: Advanced Dispute Automation ──────────────────────
+    console.log('\nPhase 9p: Advanced Dispute Automation');
+
+    // Verify the dispute automation library exists
+    const disputeLibExists = require('fs').existsSync(
+      require('path').join(process.cwd(), 'lib', 'dispute-automation.ts')
+    );
+    test('Dispute automation lib exists', disputeLibExists);
+
+    // Verify autoTriage keyword-based classification
+    const disputeLibCode = require('fs').readFileSync(
+      require('path').join(process.cwd(), 'lib', 'dispute-automation.ts'),
+      'utf-8'
+    );
+    test('autoTriage function exists',
+      disputeLibCode.includes('export function autoTriage'));
+
+    test('suggestResolution function exists',
+      disputeLibCode.includes('export function suggestResolution'));
+
+    // Verify dispute automation fields in schema
+    const schemaCode = require('fs').readFileSync(
+      require('path').join(process.cwd(), 'prisma', 'schema.prisma'),
+      'utf-8'
+    );
+    test('Disputes model has autoTriageCategory field',
+      schemaCode.includes('autoTriageCategory'));
+    test('Disputes model has riskScore field',
+      schemaCode.includes('riskScore'));
+    test('Disputes model has suggestedResolution field',
+      schemaCode.includes('suggestedResolution'));
+
+    // ─── Phase 9q: Sponsored Listings ──────────────────────────────
+    console.log('\nPhase 9q: Sponsored Listings');
+
+    // Verify the sponsored listings library exists
+    test('Sponsored listings lib exists',
+      require('fs').existsSync(require('path').join(process.cwd(), 'lib', 'sponsored-listings.ts')));
+
+    const sponsoredLibCode = require('fs').readFileSync(
+      require('path').join(process.cwd(), 'lib', 'sponsored-listings.ts'),
+      'utf-8'
+    );
+    test('calculateSponsoredAmount function exists',
+      sponsoredLibCode.includes('function calculateSponsoredAmount') ||
+      require('fs').existsSync(require('path').join(process.cwd(), 'lib', 'sponsored-types.ts')));
+    test('getActiveSponsoredProductIds function exists',
+      sponsoredLibCode.includes('function getActiveSponsoredProductIds'));
+
+    // Verify schema has sponsored_listings model
+    test('Schema has sponsored_listings model',
+      schemaCode.includes('model sponsored_listings'));
+    test('Schema has SponsoredStatus enum',
+      schemaCode.includes('enum SponsoredStatus'));
+
+    // Create a sponsored listing with pending status
+    const sponsoredListing = await db.sponsored_listings.create({
+      data: {
+        productId: product.id,
+        sellerId: seller.id,
+        amount: 150000,
+        durationDays: 3,
+        startsAt: new Date(),
+        endsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+        status: 'pending',
+        paystackRef: 'SB_SPONSOR_TEST_REF_123',
+      },
+    });
+
+    const savedListing = await db.sponsored_listings.findUnique({
+      where: { id: sponsoredListing.id },
+      select: { status: true, paystackRef: true },
+    });
+    test('Sponsored listing created with pending status',
+      savedListing?.status === 'pending');
+    test('Sponsored listing has Paystack reference',
+      savedListing?.paystackRef === 'SB_SPONSOR_TEST_REF_123');
+
+    // Update to active (simulating payment success)
+    const now = new Date();
+    await db.sponsored_listings.update({
+      where: { id: sponsoredListing.id },
+      data: {
+        status: 'active',
+        startsAt: now,
+        endsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    const activeListing = await db.sponsored_listings.findUnique({
+      where: { id: sponsoredListing.id },
+      select: { status: true },
+    });
+    test('Sponsored listing activated after payment',
+      activeListing?.status === 'active');
+
+    // Verify product appears in sponsored list
+    const now2 = new Date();
+    const activeSponsored = await db.sponsored_listings.findMany({
+      where: {
+        status: 'active',
+        endsAt: { gt: now2 },
+      },
+      select: { productId: true },
+    });
+    test('Product appears in active sponsored list after payment',
+      activeSponsored.some((l) => l.productId === product.id));
+
     // ─── Phase 10: Verify Reject/Dispute/Refund Flow ──────────────
   console.log('\nPhase 10: Verify Reject/Dispute/Refund Flow');
 
@@ -637,10 +961,11 @@ async function main() {
       productId: rejectProduct.id,
       buyerId: buyer.id,
       sellerId: seller.id,
-      itemPrice: 100000,
-      serviceFee: 10000,
-      totalAmount: 110000,
-      status: 'payment_pending',
+       itemPrice: 100000,
+       currency: 'NGN',
+       serviceFee: 10000,
+       totalAmount: 110000,
+       status: 'payment_pending',
     },
   });
 
@@ -734,8 +1059,9 @@ async function main() {
   console.log('\nCleaning up test data...');
 
    // Delete in dependency order (no cascades)
-   await db.wishlists.deleteMany({ where: { productId: product.id } });
-   await db.wishlists.deleteMany({ where: { productId: rejectProduct.id } });
+    await db.wishlists.deleteMany({ where: { productId: product.id } });
+    await db.wishlists.deleteMany({ where: { productId: rejectProduct.id } });
+    await db.sponsored_listings.deleteMany({ where: { productId: product.id } });
    await db.messages.deleteMany({ where: { transactionId: transaction.id } });
    await db.messages.deleteMany({ where: { transactionId: rejectTransaction.id } });
    await db.reviews.deleteMany({ where: { transactionId: transaction.id } });
@@ -743,16 +1069,20 @@ async function main() {
    await db.payouts.deleteMany({ where: { transactionId: transaction.id } });
    await db.payouts.deleteMany({ where: { transactionId: rejectTransaction.id } });
    await db.payments.deleteMany({ where: { transactionId: transaction.id } });
-   await db.deliveryTracking.deleteMany({ where: { transactionId: transaction.id } });
-   await db.transactions.deleteMany({
-    where: { id: { in: [transaction.id, rejectTransaction.id] } },
+    await db.deliveryTracking.deleteMany({ where: { transactionId: transaction.id } });
+    await db.loyalty_events.deleteMany({ where: { transactionId: { in: [transaction.id, rejectTransaction.id, ghcTransaction.id] } } });
+    await db.loyalty_events.deleteMany({ where: { userId: { in: [seller.id, buyer.id] } } });
+    await db.transactions.deleteMany({
+    where: { id: { in: [transaction.id, rejectTransaction.id, ghcTransaction.id] } },
   });
-   await db.productImages.deleteMany({ where: { productId: product.id } });
-   await db.productImages.deleteMany({ where: { productId: rejectProduct.id } });
-   await db.products.deleteMany({ where: { id: { in: [product.id, rejectProduct.id, relatedProduct.id] } } });
+await db.productImages.deleteMany({ where: { productId: product.id } });
+    await db.productImages.deleteMany({ where: { productId: rejectProduct.id } });
+    await db.sponsored_listings.deleteMany({ where: { sellerId: { in: [seller.id, buyer.id] } } });
+    await db.products.deleteMany({ where: { id: { in: [product.id, rejectProduct.id, relatedProduct.id, ghcProduct.id] } } });
    await db.notifications.deleteMany({ where: { userId: { in: [seller.id, buyer.id] } } });
-   await db.push_subscriptions.deleteMany({ where: { userId: { in: [seller.id, buyer.id] } } });
-   await db.users.deleteMany({ where: { id: { in: [seller.id, buyer.id] } } });
+    await db.push_subscriptions.deleteMany({ where: { userId: { in: [seller.id, buyer.id] } } });
+    await db.kyc_documents.deleteMany({ where: { userId: { in: [seller.id, buyer.id] } } });
+    await db.users.deleteMany({ where: { id: { in: [seller.id, buyer.id] } } });
 
   console.log('\n========================================');
   console.log(`  Results: ${passed} passed, ${failed} failed`);

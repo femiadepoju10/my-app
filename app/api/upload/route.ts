@@ -22,6 +22,7 @@ export async function POST(req: Request) {
 
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
+  const folder = (formData.get("folder") as string) || "skillbridge/products";
 
   if (!file) {
     return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -42,6 +43,9 @@ export async function POST(req: Request) {
     );
   }
 
+  const allowedFolders = ["skillbridge/products", "skillbridge/kyc"];
+  const safeFolder = allowedFolders.includes(folder) ? folder : "skillbridge/products";
+
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);
 
@@ -50,7 +54,7 @@ export async function POST(req: Request) {
       (resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
           {
-            folder: "skillbridge/products",
+            folder: safeFolder,
             transformation: [
               { width: 800, height: 800, crop: "limit" },
               { quality: "auto" },

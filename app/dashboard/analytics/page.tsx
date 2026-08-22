@@ -70,7 +70,7 @@ export default function AnalyticsPage() {
     ? [
         {
           title: "Total Earnings",
-          value: formatPrice(data.stats?.totalEarnings || 0),
+          value: formatPrice(data.stats?.totalEarnings || 0, "NGN"),
           icon: <DollarSign className="h-6 w-6" />,
           bgColor: "bg-emerald-100 dark:bg-emerald-900/30",
           textColor: "text-emerald-600 dark:text-emerald-400",
@@ -173,7 +173,7 @@ export default function AnalyticsPage() {
                       borderRadius: "8px",
                       fontSize: "12px",
                     }}
-                    formatter={(value: any) => [formatPrice(value as number), "Revenue"]}
+                    formatter={(value: any) => [formatPrice(value as number, "NGN"), "Revenue"]}
                   />
                   <Line type="monotone" dataKey="revenue" stroke="#4f46e5" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                 </LineChart>
@@ -260,7 +260,7 @@ export default function AnalyticsPage() {
                       <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50 truncate">{p.title}</p>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400">{p.sales} sale{p.sales === 1 ? "" : "s"}</p>
                     </div>
-                    <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">{formatPrice(p.revenue)}</span>
+                    <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">{formatPrice(p.revenue, "NGN")}</span>
                   </div>
                 ))}
           </div>

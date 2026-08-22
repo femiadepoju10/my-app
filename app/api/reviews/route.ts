@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import { db } from "@/lib/db";
+import { awardPoints } from "@/lib/loyalty";
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -99,6 +100,16 @@ export async function POST(req: Request) {
         comment: comment || null,
       },
     });
+
+    awardPoints(userId, 25, "review", transactionId).catch((err) =>
+      console.error("[Loyalty] Failed to award review points:", err)
+    );
+
+    if (rating >= 4) {
+      awardPoints(revieweeId, 10, "review_received", transactionId).catch((err) =>
+        console.error("[Loyalty] Failed to award review_received points:", err)
+      );
+    }
 
     return NextResponse.json({ success: true, review });
   } catch (error) {

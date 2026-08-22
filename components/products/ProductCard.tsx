@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { MapPin, Star } from "lucide-react";
+import { MapPin, Star, Sparkles } from "lucide-react";
 import { formatPrice, formatCondition } from "@/lib/utils";
 import { Badge } from "@/components/ui/Badge";
 import { WishlistButton } from "@/components/wishlist/WishlistButton";
@@ -13,12 +13,14 @@ interface Product {
   id: string;
   title: string;
   price: number;
+  currency?: string;
   condition: string;
   location: string;
   status: string;
   images: ProductImage[];
   seller?: { id: string; name: string };
   sellerRating?: { average: number; count: number };
+  isSponsored?: boolean;
 }
 
 const conditionVariantMap: Record<string, "success" | "primary" | "warning" | "default"> = {
@@ -55,6 +57,12 @@ export default function ProductCard({ product }: { product: Product }) {
           <Badge variant={conditionVariantMap[product.condition] || "default"}>
             {formatCondition(product.condition)}
           </Badge>
+          {product.isSponsored && (
+            <Badge variant="warning" className="ml-1.5 mt-1">
+              <Sparkles className="h-3 w-3 mr-0.5" />
+              Sponsored
+            </Badge>
+          )}
         </div>
         <div className="absolute right-3 top-3">
           <WishlistButton productId={product.id} size="sm" />
@@ -72,7 +80,7 @@ export default function ProductCard({ product }: { product: Product }) {
           {product.title}
         </h3>
         <p className="mt-1.5 text-lg font-bold text-indigo-600 dark:text-indigo-400">
-          {formatPrice(product.price)}
+          {formatPrice(product.price, product.currency)}
         </p>
         {product.sellerRating && product.sellerRating.count > 0 && (
           <div className="mt-1.5 flex items-center gap-1">

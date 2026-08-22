@@ -1,14 +1,21 @@
 import Link from "next/link";
 import { getServerSession } from "next-auth";
-import { Handshake, ShoppingCart, Tag, LayoutDashboard, Shield } from "lucide-react";
+import { Handshake, ShoppingCart, Tag, LayoutDashboard, Shield, Trophy } from "lucide-react";
 import MobileMenu from "./MobileMenu";
 import NotificationBell from "./NotificationBell";
 import LogoutButton from "./LogoutButton";
 import BrandName from "@/components/ui/BrandName";
 import { authOptions } from "@/auth";
+import { db } from "@/lib/db";
 
 export default async function Header() {
   const session = await getServerSession(authOptions);
+  const loyalty = session?.user
+    ? await db.users.findUnique({
+        where: { id: session.user.id },
+        select: { loyaltyPointBalance: true, loyaltyTier: true },
+      }).catch(() => null)
+    : null;
 
   const navLinks = [
     { href: "/products", label: "Browse", icon: ShoppingCart },
@@ -44,7 +51,16 @@ export default async function Header() {
           {session?.user ? (
             <>
               <NotificationBell />
-              {session.user.role === "admin" && (
+              {session?.user && loyalty && (loyalty.loyaltyPointBalance || 0) > 0 && (
+                <Link
+                  href="/dashboard/loyalty"
+                  className="hidden items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-300 dark:hover:bg-indigo-900/30 sm:flex"
+                >
+                  <Trophy className="h-4 w-4" />
+                  {loyalty.loyaltyPointBalance} pts
+                </Link>
+              )}
+              {session?.user?.role === "admin" && (
                 <Link
                   href="/admin"
                   className="hidden items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-purple-700 transition-colors hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/20 sm:flex"

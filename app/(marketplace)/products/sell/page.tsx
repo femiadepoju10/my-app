@@ -2,8 +2,9 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { CATEGORIES, CONDITIONS } from "@/lib/utils";
-import { Tag, Camera, Upload, X, Loader2, Info } from "lucide-react";
+import { CATEGORIES, CONDITIONS, getCurrencySymbol } from "@/lib/utils";
+import { SUPPORTED_CURRENCIES } from "@/lib/currency";
+import { Tag, Camera, Upload, X, Loader2, Info, Sparkles, Rocket } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 
 export default function SellPage() {
@@ -16,6 +17,12 @@ export default function SellPage() {
   const [serverError, setServerError] = useState("");
   const [loading, setLoading] = useState(false);
   const [price, setPrice] = useState(0);
+  const [currency, setCurrency] = useState("NGN");
+  const [description, setDescription] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [createdProductId, setCreatedProductId] = useState<string | null>(null);
+  const [boosting, setBoosting] = useState(false);
+  const [boostDuration, setBoostDuration] = useState(3);
 
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
@@ -79,10 +86,11 @@ export default function SellPage() {
 
     const body = {
       title: formData.get("title"),
-      description: formData.get("description"),
+      description: description,
       category: formData.get("category"),
       condition: formData.get("condition"),
       price: Math.round(parseFloat(formData.get("price") as string) * 100) || 0,
+      currency: formData.get("currency") as string,
       location: formData.get("location"),
       images,
     };
@@ -94,19 +102,19 @@ export default function SellPage() {
         body: JSON.stringify(body),
       });
 
-      const data = await res.json();
+       const data = await res.json();
 
-      if (!res.ok) {
-        if (data.error && typeof data.error === "object") {
-          setErrors(data.error);
-        } else {
-          setServerError(data.error || "Something went wrong");
-        }
-        return;
-      }
+       if (!res.ok) {
+         if (data.error && typeof data.error === "object") {
+           setErrors(data.error);
+         } else {
+           setServerError(data.error || "Something went wrong");
+         }
+         return;
+       }
 
-      router.push(`/products/${data.product.id}`);
-    } catch {
+       setCreatedProductId(data.product.id);
+     } catch {
       setServerError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
@@ -205,12 +213,52 @@ export default function SellPage() {
 
         {/* Description */}
         <div>
-          <label
-            htmlFor="description"
-            className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-          >
-            Description
-          </label>
+          <div className="mb-1 flex items-center justify-between">
+            <label
+              htmlFor="description"
+              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
+              Description
+            </label>
+            {images.length > 0 && (
+              <button
+                type="button"
+                onClick={async () => {
+                  setAiGenerating(true);
+                  try {
+                    const res = await fetch("/api/ai/generate-description", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ imageUrls: images }),
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      if (data.description) {
+                        setDescription(data.description);
+                        addToast("Description generated successfully", "success");
+                      }
+                    } else {
+                      const data = await res.json();
+                      addToast(data.error || "Failed to generate description", "error");
+                    }
+                  } catch {
+                    addToast("Failed to generate description", "error");
+                  } finally {
+                    setAiGenerating(false);
+                  }
+                }}
+                disabled={aiGenerating}
+                className="text-xs font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+              >
+                {aiGenerating ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Sparkles className="h-3 w-3" />
+              )}
+              {aiGenerating ? "Generating..." : "Generate with AI"}
+              </button>
+            )}
+          </div>
           <textarea
             id="description"
             name="description"
@@ -218,6 +266,8 @@ export default function SellPage() {
             rows={4}
             className={inputClass}
             placeholder="Describe your item in detail"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
           />
           {errors.description && (
             <p className="mt-1 text-xs text-red-600">
@@ -274,6 +324,30 @@ export default function SellPage() {
               </p>
             )}
           </div>
+         </div>
+
+        {/* Currency */}
+        <div>
+          <label
+            htmlFor="currency"
+            className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Currency
+          </label>
+          <select
+            id="currency"
+            name="currency"
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value)}
+            className={inputClass}
+            required
+          >
+            {SUPPORTED_CURRENCIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Price + Location */}
@@ -283,7 +357,7 @@ export default function SellPage() {
               htmlFor="price"
               className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
             >
-              Price (NGN)
+              Price ({getCurrencySymbol(currency)})
             </label>
             <input
               id="price"
@@ -309,25 +383,25 @@ export default function SellPage() {
                 </div>
                 <div className="bg-zinc-50 p-3 dark:bg-zinc-900">
                   <div className="flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
-                    <span>Your listing price</span>
-                    <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                      ₦{(price).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
-                    <span>Platform fee (10%)</span>
-                    <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                      ₦{Math.round(price * 0.1).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="mt-2 border-t border-zinc-200 pt-2 dark:border-zinc-700">
-                    <div className="flex justify-between text-xs font-bold text-zinc-900 dark:text-zinc-50">
-                      <span>Buyer pays</span>
-                      <span className="text-indigo-600 dark:text-indigo-400">
-                        ₦{(price + Math.round(price * 0.1)).toLocaleString()}
+                      <span>Your listing price</span>
+                      <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                        {getCurrencySymbol(currency)}{(price).toLocaleString()}
                       </span>
                     </div>
-                  </div>
+                    <div className="mt-1 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                      <span>Platform fee (10%)</span>
+                      <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                        {getCurrencySymbol(currency)}{Math.round(price * 0.1).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="mt-2 border-t border-zinc-200 pt-2 dark:border-zinc-700">
+                      <div className="flex justify-between text-xs font-bold text-zinc-900 dark:text-zinc-50">
+                        <span>Buyer pays</span>
+                        <span className="text-indigo-600 dark:text-indigo-400">
+                          {getCurrencySymbol(currency)}{(price + Math.round(price * 0.1)).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
                 </div>
               </div>
             )}
@@ -369,6 +443,110 @@ export default function SellPage() {
           {loading ? "Publishing..." : "Publish Listing"}
         </button>
       </form>
+
+      {createdProductId && (
+        <div className="mt-6 rounded-2xl border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-6 dark:border-indigo-900/30 dark:bg-indigo-900/10">
+          <div className="flex items-start gap-4">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-900/30">
+              <Rocket className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                Boost Your Listing
+              </h3>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                Promote your product to the top of search results. Gets 5x more views.
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="duration"
+                    value="3"
+                    checked={boostDuration === 3}
+                    onChange={() => setBoostDuration(3)}
+                    className="text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="text-sm text-zinc-700 dark:text-zinc-300">3 Days — ₦1,500</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="duration"
+                    value="7"
+                    checked={boostDuration === 7}
+                    onChange={() => setBoostDuration(7)}
+                    className="text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="text-sm text-zinc-700 dark:text-zinc-300">7 Days — ₦3,500</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="duration"
+                    value="14"
+                    checked={boostDuration === 14}
+                    onChange={() => setBoostDuration(14)}
+                    className="text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="text-sm text-zinc-700 dark:text-zinc-300">14 Days — ₦7,000</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="duration"
+                    value="1"
+                    checked={boostDuration === 1}
+                    onChange={() => setBoostDuration(1)}
+                    className="text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="text-sm text-zinc-700 dark:text-zinc-300">1 Day — ₦500</span>
+                </label>
+              </div>
+              <div className="mt-4 flex gap-3">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setBoosting(true);
+                    try {
+                      const res = await fetch("/api/sponsored-listings", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          productId: createdProductId,
+                          durationDays: boostDuration,
+                        }),
+                      });
+                      const data = await res.json();
+                      if (res.ok && data.authorization_url) {
+                        window.location.href = data.authorization_url;
+                      } else {
+                        addToast(data.error || "Failed to create sponsored listing", "error");
+                      }
+                    } catch {
+                      addToast("Failed to create sponsored listing", "error");
+                    } finally {
+                      setBoosting(false);
+                    }
+                  }}
+                  disabled={boosting}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {boosting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                  {boosting ? "Redirecting..." : "Boost Now"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push("/dashboard/sponsored")}
+                  className="text-sm font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
+                >
+                  Do it later
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

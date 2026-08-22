@@ -28,6 +28,7 @@ export async function GET(req: Request) {
         id: true,
         productId: true,
         itemPrice: true,
+        currency: true,
         serviceFee: true,
         totalAmount: true,
         status: true,

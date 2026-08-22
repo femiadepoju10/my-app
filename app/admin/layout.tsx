@@ -14,6 +14,7 @@ const ADMIN_TABS = [
   { href: "/admin/disputes", label: "Disputes", icon: "notifications" as const },
   { href: "/admin/refunds", label: "Refunds", icon: "sales" as const },
   { href: "/admin/users", label: "Users", icon: "profile" as const },
+  { href: "/admin/sponsored", label: "Sponsored", icon: "analytics" as const },
 ];
 
 export default async function AdminLayout({

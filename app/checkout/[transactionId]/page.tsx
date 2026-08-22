@@ -18,6 +18,7 @@ interface TransactionData {
   itemPrice: number;
   serviceFee: number;
   totalAmount: number;
+  currency: string;
   status: string;
   product: {
     id: string;
@@ -236,13 +237,13 @@ function CheckoutContent() {
             <div className="flex justify-between text-sm">
               <span className="text-zinc-500">Item price</span>
               <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                {formatPrice(transaction.itemPrice)}
+                {formatPrice(transaction.itemPrice, transaction.currency)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-zinc-500">Service fee (10%)</span>
               <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                {formatPrice(transaction.serviceFee)}
+                {formatPrice(transaction.serviceFee, transaction.currency)}
               </span>
             </div>
             <Separator />
@@ -251,7 +252,7 @@ function CheckoutContent() {
                 Total
               </span>
               <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
-                {formatPrice(transaction.totalAmount)}
+                {formatPrice(transaction.totalAmount, transaction.currency)}
               </span>
             </div>
           </div>

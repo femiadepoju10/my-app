@@ -4,6 +4,7 @@ import { authOptions } from "@/auth";
 import { db } from "@/lib/db";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { createNotification } from "@/lib/notifications";
+import { pointsToDiscount, discountToPoints } from "@/lib/loyalty";
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -20,76 +21,122 @@ export async function POST(req: Request) {
   }
 
   try {
-    const body = await req.json();
-    const productId = body.productId as string;
+     const body = await req.json();
+     const productId = body.productId as string;
+     const loyaltyPointsToRedeem = parseInt(body.loyaltyPointsToRedeem) || 0;
 
-    if (!productId) {
-      return NextResponse.json(
-        { error: "Valid Product ID is required" },
-        { status: 400 }
-      );
-    }
+     if (!productId) {
+       return NextResponse.json(
+         { error: "Valid Product ID is required" },
+         { status: 400 }
+       );
+     }
 
-    const buyerId = session.user.id;
+     const buyerId = session.user.id;
 
-    const transaction = await db.$transaction(async (tx) => {
-      const product = await tx.products.findUnique({
-        where: { id: productId },
-      });
+     const transaction = await db.$transaction(async (tx) => {
+       const product = await tx.products.findUnique({
+         where: { id: productId },
+       });
 
-      if (!product) {
-        throw new Error("Product not found");
-      }
+       if (!product) {
+         throw new Error("Product not found");
+       }
 
-      if (product.status !== "active") {
-        throw new Error("Product is not available");
-      }
+       if (product.status !== "active") {
+         throw new Error("Product is not available");
+       }
 
-      if (product.sellerId === buyerId) {
-        throw new Error("You cannot buy your own product");
-      }
+       if (product.sellerId === buyerId) {
+         throw new Error("You cannot buy your own product");
+       }
 
-      const existingTransaction = await tx.transactions.findFirst({
-        where: {
-          productId,
-          status: "payment_pending",
-        },
-      });
+       const existingTransaction = await tx.transactions.findFirst({
+         where: {
+           productId,
+           status: "payment_pending",
+         },
+       });
 
-      if (existingTransaction) {
-        throw new Error("Someone is already checking out this product");
-      }
+       if (existingTransaction) {
+         throw new Error("Someone is already checking out this product");
+       }
 
-      const serviceFee = Math.round(product.price * 0.1);
-      const totalAmount = product.price + serviceFee;
+       let loyaltyDiscountCents = 0;
 
-      const newTransaction = await tx.transactions.create({
-        data: {
-          productId,
-          buyerId,
-          sellerId: product.sellerId,
-          itemPrice: product.price,
-          serviceFee,
-          totalAmount,
-          status: "payment_pending",
-        },
-      });
+       if (loyaltyPointsToRedeem > 0) {
+         const user = await tx.users.findUnique({
+           where: { id: buyerId },
+           select: { loyaltyPointBalance: true },
+         });
 
-      const updateResult = await tx.products.updateMany({
-        where: { id: productId, status: "active" },
-        data: { status: "reserved", updatedAt: new Date().toISOString() },
-      });
+         if (!user) {
+           throw new Error("User not found");
+         }
 
-      if (updateResult.count === 0) {
-        throw new Error("Product was just taken by another buyer");
-      }
+         if (loyaltyPointsToRedeem < 10) {
+           throw new Error("Minimum redemption is 10 points");
+         }
 
-      return { transaction: newTransaction, sellerId: product.sellerId, productTitle: product.title };
-    });
+         if ((user.loyaltyPointBalance || 0) < loyaltyPointsToRedeem) {
+           throw new Error("Insufficient loyalty points");
+         }
 
-    createNotification(transaction.sellerId, "transaction", `Your item "${transaction.productTitle}" has been purchased! Payment is pending.`).catch(() => {});
+         loyaltyDiscountCents = pointsToDiscount(loyaltyPointsToRedeem);
+       }
 
-    return NextResponse.json({ transactionId: transaction.transaction.id });
+       const serviceFee = Math.round(product.price * 0.1);
+       const totalAmount = Math.max(0, product.price + serviceFee - loyaltyDiscountCents);
+
+        const newTransaction = await tx.transactions.create({
+          data: {
+            productId,
+            buyerId,
+            sellerId: product.sellerId,
+            itemPrice: product.price,
+            currency: product.currency,
+            serviceFee,
+            totalAmount,
+            status: "payment_pending",
+          },
+       });
+
+       if (loyaltyPointsToRedeem > 0) {
+         await tx.loyalty_events.create({
+           data: {
+             userId: buyerId,
+             points: -loyaltyPointsToRedeem,
+             source: "redemption",
+             transactionId: newTransaction.id,
+           },
+         });
+
+         await tx.users.update({
+           where: { id: buyerId },
+           data: {
+             loyaltyPointBalance: { decrement: loyaltyPointsToRedeem },
+           },
+         });
+       }
+
+       const updateResult = await tx.products.updateMany({
+         where: { id: productId, status: "active" },
+         data: { status: "reserved", updatedAt: new Date().toISOString() },
+       });
+
+       if (updateResult.count === 0) {
+         throw new Error("Product was just taken by another buyer");
+       }
+
+       return { transaction: newTransaction, sellerId: product.sellerId, productTitle: product.title, loyaltyDiscountCents };
+     });
+
+     createNotification(transaction.sellerId, "transaction", `Your item "${transaction.productTitle}" has been purchased! Payment is pending.`).catch(() => {});
+
+     return NextResponse.json({
+       transactionId: transaction.transaction.id,
+       loyaltyDiscountApplied: transaction.loyaltyDiscountCents,
+     });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Something went wrong";
@@ -128,6 +175,7 @@ export async function GET(req: Request) {
         buyerId: true,
         sellerId: true,
         itemPrice: true,
+        currency: true,
         serviceFee: true,
         totalAmount: true,
         status: true,

@@ -12,6 +12,7 @@ interface PaystackResponse {
 export async function initializeTransaction(params: {
   email: string;
   amount: number;
+  currency?: string;
   reference: string;
   callback_url: string;
   metadata?: Record<string, unknown>;
@@ -25,6 +26,7 @@ export async function initializeTransaction(params: {
     body: JSON.stringify({
       email: params.email,
       amount: params.amount,
+      currency: params.currency || "NGN",
       reference: params.reference,
       callback_url: params.callback_url,
       metadata: params.metadata,

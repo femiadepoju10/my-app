@@ -5,7 +5,12 @@ import Footer from "@/components/layout/Footer";
 import { ToastProvider } from "@/components/ui/Toast";
 import PushNotificationHandler from "@/components/notifications/PushNotificationHandler";
 import Providers from "./providers";
+import { warnEnv } from "@/lib/env";
 import "./globals.css";
+
+if (process.env.NODE_ENV === "development") {
+  warnEnv();
+}
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

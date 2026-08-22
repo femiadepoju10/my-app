@@ -81,13 +81,13 @@ export default async function AdminRefundsPage() {
                   <div>
                     <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Refund Amount</p>
                     <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-zinc-50">
-                      {formatPrice(refund.amount)}
+                      {formatPrice(refund.amount, "NGN")}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Transaction Total</p>
                     <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-zinc-50">
-                      {formatPrice(refund.transaction.totalAmount)}
+                      {formatPrice(refund.transaction.totalAmount, "NGN")}
                     </p>
                   </div>
                 </div>

@@ -1,0 +1,28 @@
+{
+  "build": {
+    "env": [
+      "DATABASE_URL",
+      "NEXTAUTH_URL",
+      "NEXTAUTH_SECRET",
+      "PAYSTACK_SECRET_KEY",
+      "PAYSTACK_PUBLIC_KEY",
+      "PAYSTACK_WEBHOOK_SECRET",
+      "CLOUDINARY_CLOUD_NAME",
+      "CLOUDINARY_API_KEY",
+      "CLOUDINARY_API_SECRET",
+      "RESEND_API_KEY",
+      "NEXT_PUBLIC_BASE_URL",
+      "OPENAI_API_KEY",
+      "NEXT_PUBLIC_VAPID_PUBLIC_KEY",
+      "VAPID_PRIVATE_KEY",
+      "TWILIO_ACCOUNT_SID",
+      "TWILIO_AUTH_TOKEN",
+      "TWILIO_PHONE_NUMBER"
+    ]
+  },
+  "functions": {
+    "app/api/**/*.ts": {
+      "maxDuration": 30
+    }
+  }
+}

@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { sendVerificationEmail, sendWelcomeEmail } from "@/lib/email";
 import { createNotification } from "@/lib/notifications";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { awardPoints } from "@/lib/loyalty";
 
 const signupSchema = z
   .object({
@@ -14,6 +15,7 @@ const signupSchema = z
     phone: z.string().min(10, "Phone number must be at least 10 digits"),
     password: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string(),
+    ref: z.string().uuid().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
@@ -42,7 +44,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { name, email, phone, password } = validated.data;
+    const { name, email, phone, password, ref } = validated.data;
 
     const existingUser = await db.users.findFirst({
       where: { email },
@@ -84,6 +86,22 @@ export async function POST(req: Request) {
     });
 
     console.log("[Signup] User created:", { userId: newUser.id, email: newUser.email });
+
+    awardPoints(newUser.id, 100, "signup").catch((err) => {
+      console.error("[Signup] Failed to award signup points:", err);
+    });
+
+    if (ref) {
+      const referrer = await db.users.findUnique({
+        where: { id: ref },
+        select: { id: true },
+      });
+      if (referrer) {
+        awardPoints(referrer.id, 500, "referral").catch((err) => {
+          console.error("[Signup] Failed to award referral points:", err);
+        });
+      }
+    }
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
     sendVerificationEmail(email, name, verificationToken, baseUrl).catch((err) => {

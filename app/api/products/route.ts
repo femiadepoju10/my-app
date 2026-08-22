@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import { db } from "@/lib/db";
 import { getSellerRatings } from "@/lib/analytics";
+import { getActiveSponsoredProductIds } from "@/lib/sponsored-listings";
 import { z } from "zod";
 
 const productSchema = z.object({
@@ -11,6 +12,7 @@ const productSchema = z.object({
   category: z.string().min(1, "Category is required"),
   condition: z.enum(["new", "like_new", "good", "fair", "used"]),
   price: z.number().int().min(1, "Price must be greater than 0"),
+  currency: z.enum(["NGN", "GHS", "KES", "ZAR", "USD"]).optional().default("NGN"),
   location: z.string().min(2, "Location is required").max(200, "Location must be at most 200 characters"),
   images: z.array(z.string()).min(1, "At least one image is required").max(5),
 });
@@ -80,17 +82,24 @@ export async function GET(req: Request) {
       orderBy = { createdAt: "desc" };
   }
 
+  const sponsoredIds: Set<string> = mine || ids
+    ? new Set<string>()
+    : new Set(await getActiveSponsoredProductIds());
+
   const [countResult, items] = await Promise.all([
     db.products.count({ where }),
     db.products.findMany({
       where,
       orderBy,
-      take: limit,
-      skip: offset,
+      take: limit + (sponsoredIds.size > 0 ? sponsoredIds.size : 0),      skip: offset,
     }),
   ]);
 
-  const productIds = items.map((item) => item.id);
+  const sponsoredFirst = items.filter((i) => sponsoredIds.has(i.id));
+  const organic = items.filter((i) => !sponsoredIds.has(i.id));
+  const sortedItems = [...sponsoredFirst, ...organic].slice(0, limit);
+
+  const productIds = sortedItems.map((item) => item.id);
   const allImages = productIds.length > 0
     ? await db.productImages.findMany({
         where: { productId: { in: productIds } },
@@ -105,12 +114,13 @@ export async function GET(req: Request) {
     imagesByProduct.set(img.productId, existing);
   }
 
-  const itemsWithImages = items.map((item) => ({
+  const itemsWithImages = sortedItems.map((item) => ({
     ...item,
+    isSponsored: sponsoredIds.has(item.id),
     images: imagesByProduct.get(item.id) || [],
   }));
 
-  const sellerIds = Array.from(new Set(items.map((i) => i.sellerId)));
+  const sellerIds = Array.from(new Set(sortedItems.map((i) => i.sellerId)));
   const sellerRatings = sellerIds.length > 0
     ? await getSellerRatings(sellerIds)
     : [];
@@ -139,19 +149,31 @@ export async function POST(req: Request) {
     const validated = productSchema.parse(body);
 
     const product = await db.$transaction(async (tx) => {
-       const existingProductCount = await tx.products.count({
-         where: { sellerId: session.user.id },
-       });
+        const existingProductCount = await tx.products.count({
+          where: { sellerId: session.user.id },
+        });
 
-       const newProduct = await tx.products.create({
+        if (existingProductCount === 0) {
+          const kycDoc = await tx.kyc_documents.findUnique({
+            where: { userId: session.user.id },
+            select: { status: true },
+          });
+
+          if (!kycDoc || kycDoc.status !== "verified") {
+            throw new Error("KYC verification required to list products");
+          }
+        }
+
+        const newProduct = await tx.products.create({
          data: {
            sellerId: session.user.id,
            title: validated.title,
            description: validated.description,
            category: validated.category,
            condition: validated.condition,
-           price: validated.price,
-           location: validated.location,
+            price: validated.price,
+            currency: validated.currency,
+            location: validated.location,
          },
        });
 
@@ -166,21 +188,33 @@ export async function POST(req: Request) {
        }
 
        if (existingProductCount === 0) {
-         await tx.users.update({
-           where: { id: session.user.id },
-           data: { sellerVerificationStatus: "pending" },
-         });
-       }
+          const currentUser = await tx.users.findUnique({
+            where: { id: session.user.id },
+            select: { sellerVerificationStatus: true },
+          });
+          if (currentUser?.sellerVerificationStatus !== "verified") {
+            await tx.users.update({
+              where: { id: session.user.id },
+              data: { sellerVerificationStatus: "pending" },
+            });
+          }
+        }
 
        return newProduct;
      });
 
     return NextResponse.json({ product }, { status: 201 });
-  } catch (error) {
+   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: error.flatten().fieldErrors },
         { status: 400 }
+      );
+    }
+    if (error instanceof Error && error.message === "KYC verification required to list products") {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 403 }
       );
     }
     return NextResponse.json(

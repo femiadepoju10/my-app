@@ -33,7 +33,7 @@ export async function GET(
 
   const product = await db.products.findUnique({
     where: { id: productId },
-    select: { category: true, price: true },
+    select: { category: true, price: true, currency: true },
   });
 
   if (!product) {
@@ -69,6 +69,7 @@ export async function GET(
         id: p.id,
         title: p.title,
         price: p.price,
+        currency: p.currency,
         image: p.images[0]?.imageUrl || null,
         seller: p.seller,
         sellerRating: rating,

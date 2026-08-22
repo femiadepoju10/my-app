@@ -454,6 +454,7 @@ export async function POST(
       transactionId,
       paystackRef: reference,
       amount: transaction.totalAmount,
+      currency: transaction.currency,
       status: "pending",
     },
   });
@@ -462,6 +463,7 @@ export async function POST(
     const paystackResult = await initializeTransaction({
       email: session.user.email || "",
       amount: transaction.totalAmount,
+      currency: transaction.currency,
       reference,
       callback_url: callbackUrl,
       metadata: {
