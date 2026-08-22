@@ -82,12 +82,33 @@ Set ALL of the following in **Vercel Dashboard → Project → Settings → Envi
 ## Pre-Deploy Checklist
 
 - [ ] All environment variables listed above are set in the Vercel dashboard
-- [ ] `DATABASE_URL` points to a PostgreSQL instance (not localhost)
+- [x] `DATABASE_URL` points to a PostgreSQL instance with `postgresql://` scheme
 - [ ] Paystack keys are from the correct environment (test vs live)
 - [ ] Cloudinary credentials are verified
 - [ ] Resend API key is active and domain is verified (for email)
 - [ ] `NEXTAUTH_SECRET` is freshly generated (`openssl rand -base64 32`)
 - [ ] Git repository is clean and committed (all new files staged)
+
+### Common P1013 Error Fix
+
+If you see this error on Vercel:
+```
+Error: P1013: The provided database string is invalid. The scheme is not recognized in database URL.
+```
+
+**This is a `DATABASE_URL` format issue, not a code issue.** Fix by:
+
+1. **Use `postgresql://` scheme** (NOT `postgres://`)
+2. **URL-encode special characters in password**:
+   - `@` → `%40`, `:` → `%3A`, `/` → `%2F`, `#` → `%23`, `+` → `%2B`
+3. **Supabase example**:
+   ```
+   postgresql://postgres:YOUR_PASSWORD@db.YOUR-PROJECT.supabase.co:5432/postgres?sslmode=require
+   ```
+4. **Neon example**:
+   ```
+   postgresql://xxx:PASSWORD@ep-xxx.eu-central-1.aws.neon.tech/dbname?sslmode=require
+   ```
 
 ## Post-Deploy Steps
 
@@ -131,7 +152,7 @@ Vercel will automatically:
 2. Run `npm run build` → `prisma generate && next build`
 3. Run `npm run postbuild` → `prisma migrate deploy` (applies any new migrations)
 
-No `vercel.json` is needed. The `next.config.ts` already configures:
+No special `vercel.json` configuration is needed beyond the provided `vercel.json` (which sets build env vars and 30s function timeouts for API routes). The `next.config.ts` already configures:
 - Cloudinary image domains
 - Security headers (CSP, HSTS, X-Frame-Options)
 - Webpack fallbacks (disables `util` polyfill)
