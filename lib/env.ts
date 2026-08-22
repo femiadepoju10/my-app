@@ -11,12 +11,21 @@ const requiredEnvVars = [
   "RESEND_API_KEY",
 ] as const;
 
-export function validateEnv() {
+export function validateEnv(throwOnError = true) {
   const missing = requiredEnvVars.filter((key) => !process.env[key]);
 
   if (missing.length > 0) {
-    throw new Error(
-      `Missing required environment variables:\n  ${missing.join("\n  ")}\n\nAdd them to .env.local and restart the dev server.`
-    );
+    const message =
+      `Missing required environment variables:\n  ${missing.join("\n  ")}\n\nAdd them to .env.local and restart the dev server.`;
+
+    if (throwOnError) {
+      throw new Error(message);
+    }
+
+    console.warn(message);
   }
+}
+
+export function warnEnv() {
+  validateEnv(false);
 }

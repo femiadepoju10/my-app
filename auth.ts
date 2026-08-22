@@ -2,9 +2,6 @@ import NextAuth, { getServerSession, type SessionStrategy } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
-import { validateEnv } from "@/lib/env";
-
-validateEnv();
 
 export const authOptions = {
   providers: [
