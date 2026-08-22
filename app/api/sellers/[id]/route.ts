@@ -64,6 +64,7 @@ export async function GET(
       id: true,
       title: true,
       price: true,
+      currency: true,
       condition: true,
       status: true,
       images: { where: { sortOrder: 0 }, take: 1 },

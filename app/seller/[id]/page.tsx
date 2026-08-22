@@ -31,6 +31,7 @@ import { getSellerRating } from "@/lib/analytics";
     id: string;
     title: string;
     price: number;
+    currency?: string;
     condition: string;
     status: string;
     images: { imageUrl: string }[];
@@ -292,7 +293,7 @@ export default async function SellerProfilePage({
                     {product.title}
                   </h3>
                   <p className="mt-1 text-lg font-bold text-indigo-600 dark:text-indigo-400">
-                    {formatPrice(product.price)}
+                    {formatPrice(product.price, product.currency)}
                   </p>
                 </div>
               </Link>

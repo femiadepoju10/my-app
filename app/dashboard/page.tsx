@@ -114,7 +114,7 @@ export default async function DashboardPage() {
       href: "/dashboard/sales",
       icon: DollarSign,
       color: "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400",
-      trend: `₦${formatPrice(totalRevenue)} earned`,
+      trend: `${formatPrice(totalRevenue, "NGN")} earned`,
       trendPositive: revenueTrend >= 0,
       subTrend: revenueTrend !== 0 ? `${revenueTrend >= 0 ? "+" : ""}${revenueTrend}% vs last week` : undefined,
     },

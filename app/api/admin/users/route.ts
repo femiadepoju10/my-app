@@ -18,12 +18,24 @@ export async function GET() {
        email: true,
        phone: true,
        role: true,
-       paystackRecipientCode: true,
-       sellerVerificationStatus: true,
-       verificationNote: true,
-       verifiedAt: true,
-       createdAt: true,
-     },
+        paystackRecipientCode: true,
+        sellerVerificationStatus: true,
+        verificationNote: true,
+        verifiedAt: true,
+        kycDocument: {
+          select: {
+            status: true,
+            documentType: true,
+            documentNumber: true,
+            documentImageUrl: true,
+            selfieImageUrl: true,
+            adminNote: true,
+            submittedAt: true,
+            reviewedAt: true,
+          },
+        },
+        createdAt: true,
+      },
     orderBy: { createdAt: "desc" },
   });
 
@@ -61,7 +73,7 @@ export async function PATCH(req: Request) {
   }
 
    const body = await req.json();
-   const { userId, role, paystackRecipientCode, sellerVerificationStatus, verificationNote } = body;
+   const { userId, role, paystackRecipientCode, sellerVerificationStatus, verificationNote, kycStatus, kycAdminNote } = body;
 
   if (!userId) {
     return NextResponse.json({ error: "userId is required" }, { status: 400 });
@@ -71,7 +83,7 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Cannot modify your own account" }, { status: 400 });
   }
 
-  const data: Record<string, string | null> = {};
+   const data: Record<string, string | null | Record<string, unknown>> = {};
   let isPayoutSetup = false;
   let payoutData: { name: string; account_number: string; bank_code: string } | null = null;
 
@@ -140,9 +152,36 @@ export async function PATCH(req: Request) {
     }
   }
 
-  if (verificationNote !== undefined) {
-    data.verificationNote = verificationNote;
-  }
+   if (verificationNote !== undefined) {
+     data.verificationNote = verificationNote;
+   }
+
+   if (kycStatus !== undefined) {
+     if (!["pending", "verified", "rejected"].includes(kycStatus)) {
+       return NextResponse.json({ error: "Invalid kycStatus" }, { status: 400 });
+     }
+
+     const kycUpdate: Record<string, unknown> = {
+       status: kycStatus,
+       reviewedAt: kycStatus === "pending" ? null : new Date().toISOString(),
+       reviewerId: kycStatus === "pending" ? null : session.user.id,
+     };
+     if (kycAdminNote !== undefined) {
+       kycUpdate.adminNote = kycAdminNote;
+     }
+
+     data.kycDocument = { update: kycUpdate };
+     data.sellerVerificationStatus = kycStatus;
+     if (kycStatus === "verified") {
+       data.verifiedAt = new Date().toISOString();
+     } else if (kycStatus === "rejected") {
+       data.verifiedAt = null;
+     }
+   } else if (kycAdminNote !== undefined) {
+     data.kycDocument = {
+       update: { adminNote: kycAdminNote },
+     };
+   }
 
   await db.users.update({
     where: { id: userId },
@@ -152,6 +191,7 @@ export async function PATCH(req: Request) {
   return NextResponse.json({
     success: true,
     paystackRecipientCode: data.paystackRecipientCode ?? null,
+    verifiedAt: data.verifiedAt ?? null,
   });
 }
 

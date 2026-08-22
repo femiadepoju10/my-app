@@ -1,15 +1,21 @@
 import { clsx, type ClassValue } from "clsx";
+import { getCurrencyConfig } from "./currency";
 
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
 }
 
-export function formatPrice(kobo: number): string {
-  return new Intl.NumberFormat("en-NG", {
+export function formatPrice(amount: number, currency?: string): string {
+  const config = getCurrencyConfig(currency);
+  return new Intl.NumberFormat(config.locale, {
     style: "currency",
-    currency: "NGN",
+    currency: config.code,
     minimumFractionDigits: 0,
-  }).format(kobo / 100);
+  }).format(amount / 100);
+}
+
+export function getCurrencySymbol(currency?: string): string {
+  return getCurrencyConfig(currency).symbol;
 }
 
 export function parsePrice(naira: string): number {

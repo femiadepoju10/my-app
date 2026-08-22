@@ -1,111 +1,150 @@
-# Plan: Vercel Deployment Readiness Assessment
+# Plan: Vercel Deployment — Sponsored Listings Feature
 
-## Goal
-Determine whether the PassitOn marketplace app can be deployed to Vercel in its current state, and produce a checklist of required/optional pre-deployment tasks.
+## Status: ✅ Implementation Complete — Ready for Vercel Deployment
 
-## Current State Analysis
+All Sponsored Listings code is implemented, tested, and the project builds successfully. This plan covers the final cleanup, environment variable configuration, and deployment steps.
 
-### Build & Code Readiness — ✅ No changes needed
-- **Next.js 16** — Vercel's native platform. ✓
-- **TypeScript** — compiles clean (`npx tsc --noEmit` passes). ✓
-- **Build** — `next build` succeeds, 51 pages generated. ✓
-- **`next.config.ts`** — valid config, CSP headers, security headers, Cloudinary image domains. ✓
-- **No custom server** — uses Next.js API routes, fully serverless-compatible. ✓
-- **No binary/native dependencies** — `bcryptjs` (pure JS) used instead of `bcrypt`. ✓
+## What Was Done (Summary)
 
-### Blocking Issues (MUST FIX before deploy)
+### Files Created
+| File | Purpose |
+|------|---------|
+| `prisma/migrations/20260822040000_add_sponsored_listings/migration.sql` | Forward-only DB migration for `sponsored_listings` table + `SponsoredStatus` enum |
+| `lib/sponsored-types.ts` | Pricing constants, duration options, amount calc functions (no DB dependency — safe for client import) |
+| `lib/sponsored-listings.ts` | `getActiveSponsoredProductIds()`, `getActiveSponsoredListings()` (DB query helpers) |
+| `app/api/sponsored-listings/route.ts` | GET (list seller's listings), POST (create + Paystack payment link) |
+| `app/api/sponsored-listings/verify/route.ts` | GET (verify Paystack payment, activate listing) |
+| `app/dashboard/sponsored/page.tsx` | Seller dashboard: view listings, retry payment, renew |
+| `app/dashboard/sponsored/verify/page.tsx` | Paystack callback page |
+| `app/admin/sponsored/page.tsx` | Admin dashboard: revenue stats, all listings |
 
-#### 1. Database is localhost — CRITICAL
-- **File:** `.env.local` line 2, `prisma.config.ts` line 5
-- **Problem:** `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/skillbridge` resolves to localhost inside Vercel's serverless functions, which will fail.
-- **Fix:** Replace with an external PostgreSQL provider (Supabase, Neon, Railway, AWS RDS). Update both `.env.local` and `prisma.config.ts`.
+### Files Modified
+| File | Change |
+|------|--------|
+| `prisma/schema.prisma` | Added `SponsoredStatus` enum, `sponsored_listings` model, relations on `products` and `users` |
+| `app/api/products/route.ts` | Boost sponsored products to top of search results, `isSponsored` field in response |
+| `app/api/webhooks/paystack/route.ts` | Handle `charge.success` for sponsored listing payments |
+| `app/(marketplace)/products/sell/page.tsx` | Boost modal after product creation with Paystack redirect |
+| `components/products/ProductCard.tsx` | "Sponsored" badge with Sparkles icon |
+| `components/ui/EmptyState.tsx` | Added `rocket` icon option |
+| `components/layout/NavTabs.tsx` | Added `rocket` icon to icon map |
+| `app/dashboard/layout.tsx` | Added "Sponsored" tab |
+| `app/admin/layout.tsx` | Added "Sponsored" tab |
+| `scripts/e2e-test.ts` | Added Phase 9q (9 assertions), fixed pre-existing cleanup bug |
+| `scripts/security-test.ts` | Added `testSponsoredListingsSecurity` (3 assertions) |
+| `docs/progress.md`, `docs/security-test-report.md`, `AGENTS.md`, `docs/buildplan.md` | Updated with results |
 
-#### 2. Prisma Data Proxy / Connection Pooling — CRITICAL
-- **File:** `lib/db/index.ts` lines 1-8
-- **Problem:** `PrismaPg` adapter creates a new `pg.Pool` per serverless function invocation. Vercel's serverless architecture leads to connection exhaustion under concurrent load.
-- **Fix options:**
-  a) Enable **Prisma Data Proxy** (`datasource db { proxy: true }` in `schema.prisma` or `datasourceUrl` env var with ` prisma://` URL) — connection pooling as a service.
-  b) Use **pgBouncer** on the PostgreSQL provider (Supabase/N Neon handle this internally).
-  c) Recommended: Switch to Prisma Data Proxy (simplest, no infra changes).
+### Validation Results
+| Check | Result |
+|-------|--------|
+| TypeScript (`npx tsc --noEmit`) | ✅ PASS |
+| Production Build (`npx next build`) | ✅ PASS (67 routes) |
+| E2E Tests (`npx tsx scripts/e2e-test.ts`) | ✅ 94/94 PASS |
+| Security Tests (`npx tsx scripts/security-test.ts`) | ✅ 116/116 PASS |
 
-#### 3. Environment Variables — `.env.example` is incomplete
-- **File:** `.env.example` (20 lines), `.env.local` (31 lines)
-- **Problem:** `.env.example` is missing 8 of 31 variables. Any developer onboarding or Vercel setup using the example will fail at runtime.
-- **Missing in `.env.example`:**
-  - `NEXTAUTH_URL` — required by `validateEnv()`
-  - `NEXTAUTH_SECRET` — required
-  - `PAYSTACK_WEBHOOK_SECRET`
-  - `NEXT_PUBLIC_VAPID_PUBLIC_KEY`
-  - `VAPID_PRIVATE_KEY`
-  - `TWILIO_ACCOUNT_SID` (optional, but referenced)
-  - `TWILIO_AUTH_TOKEN` (optional)
-  - `TWILIO_PHONE_NUMBER` (optional)
-- **Fix:** Update `.env.example` to include all variables from `.env.local`.
+## Environment Variables for Vercel
 
-#### 4. `PAYSTACK_WEBHOOK_SECRET` is placeholder — HIGH
-- **File:** `.env.local` line 11
-- **Problem:** `PAYSTACK_WEBHOOK_SECRET=your_webhook_secret_here` — webhook verification at `app/api/webhooks/paystack/route.ts` will reject all real Paystack webhooks.
-- **Fix:** Set real webhook secret in Vercel env vars from Paystack dashboard.
+Set ALL of the following in **Vercel Dashboard → Project → Settings → Environment Variables**. Add each for `Production`, `Preview`, and `Development` environments as appropriate.
 
-### Optional Improvements (Recommended before deploy)
+### Required
 
-#### 5. Prisma Migrate in Build — HIGH
-- **Problem:** Database schema must exist before the app runs. There's no `postbuild` script running `prisma migrate deploy`.
-- **Fix:** Add `"postbuild": "prisma generate && prisma migrate deploy"` or use `PrismaClient` with a migration step. Vercel integration auto-runs nothing; need explicit migration handling.
-- **Alternative:** Use `prisma db push` for initial deploy (acceptable for small apps).
+| Variable | Value | Notes |
+|----------|-------|-------|
+| `DATABASE_URL` | PostgreSQL connection string | Use Supabase, Neon, or Vercel Postgres. Format: `postgresql://user:password@host:5432/dbname` |
+| `NEXTAUTH_URL` | `https://your-app-name.vercel.app` | Auto-set by Vercel in most cases; set explicitly if needed |
+| `NEXTAUTH_SECRET` | `openssl rand -base64 32` | **Generate fresh** — do NOT reuse the local value |
+| `PAYSTACK_SECRET_KEY` | From Paystack Dashboard → API Keys | Test key: `sk_test_...`, Live key: `sk_live_...` |
+| `PAYSTACK_PUBLIC_KEY` | From Paystack Dashboard → API Keys | Test key: `pk_test_...`, Live key: `pk_live_...` |
+| `PAYSTACK_WEBHOOK_SECRET` | From Paystack Dashboard → Settings → Webhooks | Required after first deploy (see Post-Deploy Steps) |
+| `CLOUDINARY_CLOUD_NAME` | `wq2t8ywr` | From Cloudinary dashboard |
+| `CLOUDINARY_API_KEY` | `396525169517369` | From Cloudinary dashboard |
+| `CLOUDINARY_API_SECRET` | `-BBnZNqEipDKw1qPfQaiMQ7Hgu0` | From Cloudinary dashboard |
+| `RESEND_API_KEY` | From Resend Dashboard → API Keys | For transactional emails |
+| `NEXT_PUBLIC_BASE_URL` | `https://your-app-name.vercel.app` | Client-side base URL for redirects |
 
-#### 6. NextAuth Secret & URL — HIGH
-- `NEXTAUTH_SECRET` and `NEXTAUTH_URL` are set to localhost values. On Vercel, these must be set in project settings:
-  - `NEXTAUTH_URL=https://your-app.vercel.app`
-  - `NEXTAUTH_SECRET=<strong-random-string>`
+### Optional
 
-#### 7. Build Cache Optimization
-- No `output: "standalone"` or `output: "export"` in `next.config.ts`. Vercel handles this natively; no change needed. ✓
+| Variable | Value | Notes |
+|----------|-------|-------|
+| `OPENAI_API_KEY` | From OpenAI Platform → API Keys | Required for AI product description generation |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | VAPID public key | Required for push notifications; generate with `node -e "console.log(require('web-push').generateVAPIDKeys().publicKey)"` |
+| `VAPID_PRIVATE_KEY` | VAPID private key | Same command as above (`.privateKey`) |
+| `TWILIO_ACCOUNT_SID` | From Twilio Console | Required for SMS notifications |
+| `TWILIO_AUTH_TOKEN` | From Twilio Console | Required for SMS notifications |
+| `TWILIO_PHONE_NUMBER` | Your Twilio phone number | Required for SMS notifications |
 
-## Pre-Deployment Checklist
+### How to set environment variables on Vercel:
+1. Go to [vercel.com](https://vercel.com) → your project → Settings → Environment Variables
+2. For each variable: set **Name**, **Value**, and **Environment** (Production, Preview, Development)
+3. Click **Save** for each variable
+4. Redeploy the project after adding all variables
 
-| # | Item | Severity | Action |
-|---|------|----------|--------|
-| 1 | Replace localhost DATABASE_URL with external PostgreSQL | CRITICAL | Choose Supabase/N Neon/Railway; set `DATABASE_URL` in Vercel env |
-| 2 | Enable Prisma Data Proxy or pgBouncer | CRITICAL | Add `datasourceUrl = env("DATABASE_URL")` + proxy, or ensure provider handles pooling |
-| 3 | Fix `PAYSTACK_WEBHOOK_SECRET` | HIGH | Set real value from Paystack dashboard in Vercel env |
-| 4 | Set `NEXTAUTH_URL` to Vercel domain | HIGH | Add to Vercel env vars |
-| 5 | Generate `NEXTAUTH_SECRET` | HIGH | `openssl rand -base64 32`, set in Vercel env |
-| 6 | Update `.env.example` with all required vars | MEDIUM | Add 8 missing variables |
-| 7 | Add migration deploy to build | MEDIUM | Add `postbuild` script: `prisma generate && prisma migrate deploy` |
-| 8 | VAPID keys for push notifications | LOW | Set in Vercel env (optional if push not needed immediately) |
-| 9 | Twilio credentials (optional) | LOW | Set in Vercel env if SMS notifications are used |
-| 10 | Cloudinary credentials | LOW | Set in Vercel env |
-| 11 | Resend API key | LOW | Set in Vercel env |
+## Pre-Deploy Checklist
 
-## Data Migration Concerns
+- [ ] All environment variables listed above are set in the Vercel dashboard
+- [ ] `DATABASE_URL` points to a PostgreSQL instance (not localhost)
+- [ ] Paystack keys are from the correct environment (test vs live)
+- [ ] Cloudinary credentials are verified
+- [ ] Resend API key is active and domain is verified (for email)
+- [ ] `NEXTAUTH_SECRET` is freshly generated (`openssl rand -base64 32`)
+- [ ] Git repository is clean and committed (all new files staged)
 
-- **No data migration needed** — the database is PostgreSQL and can be restored/migrated from the local instance.
-- **Forward-only migrations** — existing migration files in `prisma/migrations/` are forward-only; Vercel build will run `prisma migrate deploy` to apply them.
-- **Database must be pre-provisioned** — schema must exist before serverless functions can query it.
+## Post-Deploy Steps
 
-## Implementation Results
+1. **Configure Paystack Webhook**
+   - Go to [Paystack Dashboard](https://dashboard.paystack.co) → Settings → Webhooks
+   - Add endpoint: `https://your-app-name.vercel.app/api/webhooks/paystack`
+   - Select triggers: `charge.success`, `transfer.success`, `transfer.failed`
+   - Copy the webhook secret to `PAYSTACK_WEBHOOK_SECRET` in Vercel env vars
+   - Redeploy
 
-### Completed Actions (Codebase Changes)
-1. **`prisma.config.ts`** — Changed hardcoded `DATABASE_URL` to `process.env.DATABASE_URL`
-2. **`.env.example`** — Updated to include all 31 variables from `.env.local` (missing 8: `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `PAYSTACK_WEBHOOK_SECRET`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`)
-3. **`package.json`** — Added `"prisma generate && next build"` as build script and `"postbuild": "prisma migrate deploy"` for production migrations
+2. **Verify Database Migrations**
+   - The `postbuild` script runs `prisma migrate deploy` automatically after each Vercel build
+   - Verify tables were created by checking your PostgreSQL instance
 
-### Remaining Deployment Actions (Manual / Environment)
-| # | Action | Severity | Who |
-|---|--------|----------|-----|
-| 1 | Provision external PostgreSQL (Supabase/NNeon/Railway) | CRITICAL | DevOps |
-| 2 | Set `DATABASE_URL` in Vercel env vars | CRITICAL | DevOps |
-| 3 | Enable Prisma Data Proxy or use pooled connection string | CRITICAL | DevOps |
-| 4 | Set `NEXTAUTH_URL` to Vercel deployment URL | HIGH | DevOps |
-| 5 | Generate and set `NEXTAUTH_SECRET` (`openssl rand -base64 32`) | HIGH | DevOps |
-| 6 | Set `PAYSTACK_WEBHOOK_SECRET` from Paystack dashboard | HIGH | DevOps |
-| 7 | Set VAPID keys for push notifications | LOW | DevOps |
-| 8 | Set Twilio credentials if using SMS | LOW | DevOps |
-| 9 | Set Cloudinary, Resend credentials | LOW | DevOps |
+3. **Verify Email Delivery**
+   - Go to [Resend Dashboard](https://resend.com) → Domains
+   - Ensure your domain is verified (or add a sender identity)
+   - Send a test email from the app (signup/verification)
 
-### Post-Implementation Verification
-- TypeScript: PASS
-- Build: PASS (51 pages, `prisma generate` runs before build)
-- E2E Tests: 63/63 PASS
-- Security Tests: 91/91 PASS
+4. **Verify Cloudinary**
+   - Upload a test image via the sell page
+   - Confirm it appears in the Cloudinary media library under the `skillbridge/` folder
+
+5. **Test Core Flows**
+   - Sign up a new user
+   - List a product (KYC must be completed first)
+   - Create a sponsored listing (pay via Paystack test card: `4000000000000002` / any 3-digit CVV)
+   - Verify the sponsored badge appears on the product card
+   - Verify the product appears at the top of search results
+
+## Vercel Build Configuration
+
+The project's `package.json` already has the correct build settings:
+```json
+"build": "prisma generate && next build",
+"postbuild": "prisma migrate deploy"
+```
+
+Vercel will automatically:
+1. Run `npm install`
+2. Run `npm run build` → `prisma generate && next build`
+3. Run `npm run postbuild` → `prisma migrate deploy` (applies any new migrations)
+
+No `vercel.json` is needed. The `next.config.ts` already configures:
+- Cloudinary image domains
+- Security headers (CSP, HSTS, X-Frame-Options)
+- Webpack fallbacks (disables `util` polyfill)
+
+## Remaining V2.0 Features (Deferred — Next Update)
+
+| Feature | Priority | Notes |
+|---------|----------|-------|
+| AI recommendations | Medium | Product recs engine — not yet implemented |
+| Automated logistics | Medium | Beyond MVP scope |
+| Seller subscriptions | Medium | Recurring billing — separate feature |
+| Advertising | Medium | Separate from sponsored listings |
+| Auctions | Low | Niche feature |
+| International transactions | Medium | Multi-currency done, cross-border payments TBD |
+| Advanced fraud detection | Medium | ML-based risk scoring |
+| Mobile applications | High | Very complex — React Native app |

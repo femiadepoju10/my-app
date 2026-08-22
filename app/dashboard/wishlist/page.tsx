@@ -17,6 +17,7 @@ interface WishlistItem {
     id: string;
     title: string;
     price: number;
+    currency?: string;
     condition: string;
     location: string;
     status: string;
@@ -111,7 +112,7 @@ export default function WishlistPage() {
                   {item.product.seller.name}
                 </p>
                 <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
-                  {formatPrice(item.product.price)}
+                  {formatPrice(item.product.price, item.product.currency)}
                 </p>
               </div>
               <div className="flex items-center gap-2">

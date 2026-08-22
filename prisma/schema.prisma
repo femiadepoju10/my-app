@@ -37,9 +37,15 @@ model users {
   notifications           notifications[]
   wishlists               wishlists[]
   sentMessages            messages[]
-  pushSubscription        push_subscriptions?
+   pushSubscription        push_subscriptions?
+   loyaltyPointBalance     Int      @default(0) @map("loyalty_point_balance")
+   loyaltyTier             String?  @default("bronze") @map("loyalty_tier")
+   loyaltyEvents           loyalty_events[] @relation("userLoyaltyEvents")
+    kycDocument             kyc_documents?
+    kycReviewed             kyc_documents[] @relation("KycReviewer")
+    sponsoredListings       sponsored_listings[]
 
-  @@map("users")
+    @@map("users")
 }
 
 model products {
@@ -50,6 +56,7 @@ model products {
   category    String
   condition   ProductCondition
   price       Int
+  currency    Currency @default(NGN) @map("currency")
   location    String
   status      ProductStatus @default(active)
   createdAt   DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
@@ -59,6 +66,7 @@ model products {
   images       productImages[]
   transactions transactions[]
   wishlists    wishlists[]
+  sponsored    sponsored_listings?
 
   @@index([sellerId])
   @@index([status])
@@ -86,6 +94,7 @@ model transactions {
   buyerId          String            @map("buyer_id")
   sellerId         String            @map("seller_id")
   itemPrice        Int               @map("item_price")
+  currency         Currency          @default(NGN) @map("currency")
   serviceFee       Int               @map("service_fee")
   totalAmount      Int               @map("total_amount")
   status           TransactionStatus @default(payment_pending)
@@ -105,8 +114,9 @@ model transactions {
    reviews    reviews?
    messages   messages[]
    deliveryTracking DeliveryTracking?
+   loyaltyEvents    loyalty_events[]
 
-  @@index([buyerId])
+   @@index([buyerId])
   @@index([sellerId])
   @@index([productId])
   @@index([status])
@@ -118,6 +128,7 @@ model payments {
   transactionId   String          @map("transaction_id")
   paystackRef     String          @unique @map("paystack_ref")
   amount          Int
+  currency        String          @default("NGN") @map("currency")
   status          PaymentStatus   @default(pending)
   gatewayResponse String?         @map("gateway_response")
   paidAt          String?         @map("paid_at")
@@ -168,6 +179,11 @@ model disputes {
   evidence      String?
   status        DisputeStatus @default(open)
   resolution    String?
+  autoTriageCategory  String?       @map("auto_triage_category")
+  riskScore           Int?          @map("risk_score")
+  suggestedResolution String?       @map("suggested_resolution")
+  autoResolved        Boolean       @default(false) @map("auto_resolved")
+  autoResolvedAt      DateTime?     @map("auto_resolved_at")
   createdAt     DateTime      @default(now()) @db.Timestamptz(6) @map("created_at")
 
   transaction transactions @relation(fields: [transactionId], references: [id])
@@ -175,7 +191,31 @@ model disputes {
 
   @@index([transactionId])
   @@index([openedById])
+  @@index([riskScore])
+  @@index([autoTriageCategory])
   @@map("disputes")
+}
+
+model sponsored_listings {
+  id             String          @id @default(uuid())
+  productId      String          @unique @map("product_id")
+  sellerId       String          @map("seller_id")
+  amount         Int
+  currency       Currency        @default(NGN)
+  durationDays   Int             @map("duration_days")
+  startsAt       DateTime        @map("starts_at") @default(now())
+  endsAt         DateTime        @map("ends_at")
+  status         SponsoredStatus @default(pending)
+  paystackRef    String          @map("paystack_ref")
+  createdAt      DateTime        @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  product products @relation(fields: [productId], references: [id], onDelete: Restrict)
+  seller  users   @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+
+  @@index([productId])
+  @@index([sellerId])
+  @@index([status])
+  @@map("sponsored_listings")
 }
 
 model DeliveryTracking {
@@ -295,6 +335,14 @@ enum ProductStatus {
   removed
 }
 
+enum Currency {
+  NGN
+  GHS
+  KES
+  ZAR
+  USD
+}
+
 enum TransactionStatus {
   payment_pending
   payment_confirmed
@@ -340,4 +388,71 @@ enum DisputeStatus {
   admin_reviewing
   refunded
   seller_paid
+}
+
+enum LoyaltySource {
+  signup
+  purchase
+  sale
+  review
+  review_received
+  referral
+  wishlist
+  redemption
+}
+
+model loyalty_events {
+  id            String        @id @default(uuid())
+  userId        String        @map("user_id")
+  points        Int
+  source        LoyaltySource
+  transactionId String?       @map("transaction_id")
+  expiresAt     DateTime?     @map("expires_at")
+  createdAt     DateTime      @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  user          users?         @relation("userLoyaltyEvents", fields: [userId], references: [id])
+  transaction   transactions?  @relation(fields: [transactionId], references: [id])
+
+   @@index([userId])
+   @@index([transactionId])
+   @@map("loyalty_events")
+}
+
+enum KycDocumentType {
+  passport
+  driver_license
+  national_id
+}
+
+enum KycStatus {
+  pending
+  verified
+  rejected
+}
+
+enum SponsoredStatus {
+  pending
+  active
+  expired
+  cancelled
+}
+
+model kyc_documents {
+  id              String           @id @default(uuid())
+  userId          String           @unique @map("user_id")
+  documentType    KycDocumentType  @map("document_type")
+  documentNumber  String?          @map("document_number")
+  documentImageUrl String          @map("document_image_url")
+  selfieImageUrl  String?          @map("selfie_image_url")
+  status          KycStatus        @default(pending)
+  adminNote       String?          @db.VarChar(500) @map("admin_note")
+  submittedAt     DateTime         @default(now()) @db.Timestamptz(6) @map("submitted_at")
+  reviewedAt      DateTime?        @map("reviewed_at") @db.Timestamptz(6)
+  reviewerId      String?          @map("reviewer_id")
+
+  user     users? @relation(fields: [userId], references: [id], onDelete: Restrict)
+  reviewer users? @relation("KycReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@map("kyc_documents")
 }

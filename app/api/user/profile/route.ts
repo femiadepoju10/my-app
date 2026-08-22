@@ -30,6 +30,15 @@ export async function GET() {
         smsEnabled: true,
         role: true,
         paystackRecipientCode: true,
+        kycDocument: {
+          select: {
+            status: true,
+            documentType: true,
+            adminNote: true,
+            reviewedAt: true,
+            submittedAt: true,
+          },
+        },
         createdAt: true,
       },
     });

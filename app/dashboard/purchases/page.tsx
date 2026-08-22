@@ -15,6 +15,7 @@ interface Transaction {
   itemPrice: number;
   serviceFee: number;
   totalAmount: number;
+  currency: string;
   status: string;
   createdAt: string;
   productId: string;
@@ -136,7 +137,7 @@ export default function PurchasesPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                      {formatPrice(tx.totalAmount)}
+                      {formatPrice(tx.totalAmount, tx.currency)}
                     </p>
                     <Badge variant={statusVariantMap[tx.status] || "default"} size="sm" className="mt-1">
                       {statusLabel[tx.status] ?? tx.status}

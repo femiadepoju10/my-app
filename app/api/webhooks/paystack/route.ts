@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { verifyWebhookSignature, verifyTransaction } from "@/lib/paystack";
 import { sendTransactionEmail } from "@/lib/email";
 import { notifyTransactionParticipants } from "@/lib/notifications";
+import { awardPoints, POINTS_PER_DOLLAR_PURCHASE, POINTS_PER_DOLLAR_SALE } from "@/lib/loyalty";
+import { calculateSponsoredEndsAt } from "@/lib/sponsored-types";
 
 export async function POST(req: Request) {
   const body = await req.text();
@@ -59,11 +61,45 @@ export async function POST(req: Request) {
         (verificationData.metadata as Record<string, unknown>)
           ?.transaction_id;
 
-      if (!transactionIdFromMeta) {
+      const sponsoredListingIdFromMeta =
+        event.data?.metadata?.sponsored_listing_id ||
+        (verificationData.metadata as Record<string, unknown>)
+          ?.sponsored_listing_id;
+
+      if (!transactionIdFromMeta && !sponsoredListingIdFromMeta) {
         return NextResponse.json(
-          { error: "No transaction ID" },
+          { error: "No transaction or sponsored listing ID" },
           { status: 400 }
         );
+      }
+
+      if (sponsoredListingIdFromMeta && !transactionIdFromMeta) {
+        const listingId = String(sponsoredListingIdFromMeta);
+
+        const existingListing = await db.sponsored_listings.findUnique({
+          where: { id: listingId },
+        });
+
+        if (!existingListing || existingListing.status === "active") {
+          return NextResponse.json({ received: true });
+        }
+
+        const startsAt = new Date();
+        const endsAt = calculateSponsoredEndsAt(
+          startsAt,
+          existingListing.durationDays
+        );
+
+        await db.sponsored_listings.update({
+          where: { id: listingId },
+          data: {
+            status: "active",
+            startsAt,
+            endsAt,
+          },
+        });
+
+        return NextResponse.json({ received: true });
       }
 
       const txId = String(transactionIdFromMeta);
@@ -160,7 +196,7 @@ export async function POST(req: Request) {
 
         const txn = await tx.transactions.findUnique({
           where: { id: payout.transactionId },
-          select: { productId: true },
+          select: { productId: true, buyerId: true, sellerId: true, totalAmount: true },
         });
 
         if (txn) {
@@ -178,6 +214,23 @@ export async function POST(req: Request) {
           },
         });
       });
+
+      const txn = await db.transactions.findUnique({
+        where: { id: payout.transactionId },
+        select: { buyerId: true, sellerId: true, totalAmount: true },
+      });
+
+      if (txn) {
+        const purchasePoints = Math.floor((txn.totalAmount / 100) * POINTS_PER_DOLLAR_PURCHASE);
+        const salePoints = Math.floor((txn.totalAmount / 100) * POINTS_PER_DOLLAR_SALE);
+
+        awardPoints(txn.buyerId, purchasePoints, "purchase", payout.transactionId).catch((err) =>
+          console.error("[Loyalty] Failed to award buyer points:", err)
+        );
+        awardPoints(txn.sellerId, salePoints, "sale", payout.transactionId).catch((err) =>
+          console.error("[Loyalty] Failed to award seller points:", err)
+        );
+      }
 
       sendTransactionEmail(payout.transactionId, "payout_completed").catch(() => {});
       notifyTransactionParticipants(payout.transactionId, "payout_completed").catch(() => {});

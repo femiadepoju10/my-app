@@ -44,6 +44,7 @@ interface Product {
   category: string;
   condition: string;
   price: number;
+  currency?: string;
   location: string;
   status: string;
   createdAt: string;
@@ -56,6 +57,7 @@ interface Recommendation {
   id: string;
   title: string;
   price: number;
+  currency?: string;
   image: string | null;
   seller: { id: string; name: string };
   sellerRating: { average: number; count: number };
@@ -253,10 +255,10 @@ export default function ProductDetailsPage() {
 
           <div className="mt-2 flex items-baseline gap-3">
             <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
-              {formatPrice(product.price)}
+              {formatPrice(product.price, product.currency)}
             </p>
             <span className="text-sm text-zinc-500 line-through">
-              {formatPrice(total)}
+              {formatPrice(total, product.currency)}
             </span>
           </div>
 
@@ -308,16 +310,16 @@ export default function ProductDetailsPage() {
             <div className="p-4">
               <div className="flex justify-between text-sm text-zinc-600 dark:text-zinc-400">
                 <span>Item price</span>
-                <span>{formatPrice(product.price)}</span>
+                <span>{formatPrice(product.price, product.currency)}</span>
               </div>
               <div className="mt-1 flex justify-between text-sm text-zinc-600 dark:text-zinc-400">
                 <span>Service fee (10%)</span>
-                <span>{formatPrice(serviceFee)}</span>
+                <span>{formatPrice(serviceFee, product.currency)}</span>
               </div>
               <Separator className="my-2" />
               <div className="flex justify-between text-sm font-bold text-zinc-900 dark:text-zinc-50">
                 <span>Total you pay</span>
-                <span className="text-indigo-600 dark:text-indigo-400">{formatPrice(total)}</span>
+                <span className="text-indigo-600 dark:text-indigo-400">{formatPrice(total, product.currency)}</span>
               </div>
             </div>
           </Card>
@@ -516,7 +518,7 @@ export default function ProductDetailsPage() {
             className="w-full"
           >
             <ShoppingCart className="h-4 w-4" />
-            {buying ? "Starting checkout..." : `Buy Now — ${formatPrice(total)}`}
+            {buying ? "Starting checkout..." : `Buy Now — ${formatPrice(total, product.currency)}`}
           </Button>
         </div>
       )}

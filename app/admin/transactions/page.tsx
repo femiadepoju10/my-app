@@ -137,7 +137,7 @@ export default function AdminTransactionsPage() {
                     </td>
                     <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 max-w-[200px] truncate">{tx.productName}</td>
                     <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{tx.buyerName}</td>
-                    <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-50">{formatPrice(tx.totalAmount)}</td>
+                    <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-50">{formatPrice(tx.totalAmount, "NGN")}</td>
                     <td className="px-4 py-3">
                       <Badge variant={statusVariantMap[tx.status] || "default"} size="sm">
                         {tx.status.replace(/_/g, " ")}

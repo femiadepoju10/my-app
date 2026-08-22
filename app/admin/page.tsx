@@ -147,7 +147,7 @@ export default function AdminPage() {
           <div className="mt-4">
             <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Platform Revenue</p>
             <p className="mt-1 text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-              {loading ? "..." : formatPrice(totalRevenue)}
+              {loading ? "..." : formatPrice(totalRevenue, "NGN")}
             </p>
           </div>
         </Card>
@@ -175,7 +175,7 @@ export default function AdminPage() {
                       borderRadius: "8px",
                       fontSize: "12px",
                     }}
-                    formatter={(value: any) => [formatPrice(value as number), "Revenue"]}
+                    formatter={(value: any) => [formatPrice(value as number, "NGN"), "Revenue"]}
                   />
                   <Line type="monotone" dataKey="revenue" stroke="#4f46e5" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                 </LineChart>
@@ -265,7 +265,7 @@ export default function AdminPage() {
                       borderRadius: "8px",
                       fontSize: "12px",
                     }}
-                    formatter={(value: any) => [formatPrice(value as number), "Sales"]}
+                    formatter={(value: any) => [formatPrice(value as number, "NGN"), "Sales"]}
                   />
                   <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} />
                 </BarChart>

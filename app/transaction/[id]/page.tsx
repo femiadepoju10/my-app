@@ -26,6 +26,7 @@ interface TransactionData {
   itemPrice: number;
   serviceFee: number;
   totalAmount: number;
+  currency: string;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -646,7 +647,7 @@ function TransactionContent() {
           </div>
           <div className="p-6">
             <p className="mb-4 text-sm text-emerald-700 dark:text-emerald-300">
-              Are you sure you want to accept this item? This will release {formatPrice(transaction.itemPrice)} to the seller.
+              Are you sure you want to accept this item? This will release {formatPrice(transaction.itemPrice, transaction.currency)} to the seller.
             </p>
             <div className="flex gap-3">
               <Button onClick={() => { handleStatusChange("accepted"); setShowAcceptModal(false); }} isLoading={actionLoading}>
@@ -751,7 +752,7 @@ function TransactionContent() {
           <div className="p-6 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-zinc-500">Seller receives</span>
-              <span className="font-semibold text-indigo-600 dark:text-indigo-400">{formatPrice(transaction.itemPrice)}</span>
+              <span className="font-semibold text-indigo-600 dark:text-indigo-400">{formatPrice(transaction.itemPrice, transaction.currency)}</span>
             </div>
             <Separator />
             <div className="flex justify-between text-sm">
@@ -782,7 +783,7 @@ function TransactionContent() {
           <div className="p-6 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-zinc-500">Refund amount</span>
-              <span className="font-semibold text-amber-600 dark:text-amber-400">{formatPrice(transaction.refund?.amount || transaction.totalAmount)}</span>
+              <span className="font-semibold text-amber-600 dark:text-amber-400">{formatPrice(transaction.refund?.amount || transaction.totalAmount, transaction.currency)}</span>
             </div>
             <Separator />
             <div className="flex justify-between text-sm">
@@ -888,16 +889,16 @@ function TransactionContent() {
         <div className="p-6 space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-zinc-500">Item price</span>
-            <span className="font-medium text-zinc-900 dark:text-zinc-50">{formatPrice(transaction.itemPrice)}</span>
+              <span className="font-medium text-zinc-900 dark:text-zinc-50">{formatPrice(transaction.itemPrice, transaction.currency)}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-zinc-500">Service fee (10%)</span>
-            <span className="font-medium text-zinc-900 dark:text-zinc-50">{formatPrice(transaction.serviceFee)}</span>
+              <span className="font-medium text-zinc-900 dark:text-zinc-50">{formatPrice(transaction.serviceFee, transaction.currency)}</span>
           </div>
           <Separator />
           <div className="flex justify-between font-semibold">
             <span>Total</span>
-            <span className="text-indigo-600 dark:text-indigo-400">{formatPrice(transaction.totalAmount)}</span>
+            <span className="text-indigo-600 dark:text-indigo-400">{formatPrice(transaction.totalAmount, transaction.currency)}</span>
           </div>
           {transaction.payment && (
             <>

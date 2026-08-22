@@ -2,7 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { CATEGORIES, CONDITIONS } from "@/lib/utils";
+import { CATEGORIES, CONDITIONS, getCurrencySymbol } from "@/lib/utils";
+import { SUPPORTED_CURRENCIES } from "@/lib/currency";
+import { Sparkles, Loader2 } from "lucide-react";
+import { useToast } from "@/components/ui/Toast";
 
 export default function EditListingPage() {
   const router = useRouter();
@@ -13,6 +16,7 @@ export default function EditListingPage() {
   const [category, setCategory] = useState("");
   const [condition, setCondition] = useState("");
   const [price, setPrice] = useState("");
+  const [currency, setCurrency] = useState("NGN");
   const [location, setLocation] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -20,6 +24,8 @@ export default function EditListingPage() {
   const [serverError, setServerError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const { addToast } = useToast();
 
   useEffect(() => {
     async function fetchProduct() {
@@ -35,6 +41,7 @@ export default function EditListingPage() {
       setCategory(p.category);
       setCondition(p.condition);
       setPrice(String(p.price / 100));
+      setCurrency(p.currency || "NGN");
       setLocation(p.location);
       setImages(p.images.map((img: { imageUrl: string }) => img.imageUrl));
       setLoading(false);
@@ -101,6 +108,7 @@ export default function EditListingPage() {
       category,
       condition,
       price: Math.round(parseFloat(price) * 100) || 0,
+      currency,
       location,
       images,
     };
@@ -209,12 +217,52 @@ export default function EditListingPage() {
         </div>
 
         <div>
-          <label
-            htmlFor="description"
-            className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-          >
-            Description
-          </label>
+          <div className="mb-1 flex items-center justify-between">
+            <label
+              htmlFor="description"
+              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
+              Description
+            </label>
+            {images.length > 0 && (
+              <button
+                type="button"
+                onClick={async () => {
+                  setAiGenerating(true);
+                  try {
+                    const res = await fetch("/api/ai/generate-description", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ imageUrls: images }),
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      if (data.description) {
+                        setDescription(data.description);
+                        addToast("Description generated successfully", "success");
+                      }
+                    } else {
+                      const data = await res.json();
+                      addToast(data.error || "Failed to generate description", "error");
+                    }
+                  } catch {
+                    addToast("Failed to generate description", "error");
+                  } finally {
+                    setAiGenerating(false);
+                  }
+                }}
+                disabled={aiGenerating}
+                className="text-xs font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+              >
+                {aiGenerating ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3 w-3" />
+                )}
+                {aiGenerating ? "Generating..." : "Generate with AI"}
+              </button>
+            )}
+          </div>
           <textarea
             id="description"
             required
@@ -271,7 +319,7 @@ export default function EditListingPage() {
               htmlFor="price"
               className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
             >
-              Price (NGN)
+              Price ({getCurrencySymbol(currency)})
             </label>
             <input
               id="price"
@@ -282,6 +330,27 @@ export default function EditListingPage() {
               onChange={(e) => setPrice(e.target.value)}
               className={inputClass}
             />
+          </div>
+
+          <div>
+            <label
+              htmlFor="currency"
+              className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
+            </label>
+            <select
+              id="currency"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              className={inputClass}
+              required
+            >
+              {SUPPORTED_CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>

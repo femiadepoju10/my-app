@@ -10,6 +10,9 @@ const DASHBOARD_TABS = [
   { href: "/dashboard/purchases", label: "My Purchases", icon: "purchases" as const },
   { href: "/dashboard/sales", label: "My Sales", icon: "sales" as const },
   { href: "/dashboard/wishlist", label: "Wishlist", icon: "wishlist" as const },
+  { href: "/dashboard/loyalty", label: "Loyalty", icon: "loyalty" as const },
+  { href: "/dashboard/kyc", label: "KYC", icon: "kyc" as const },
+  { href: "/dashboard/sponsored", label: "Sponsored", icon: "sponsored" as const },
   { href: "/dashboard/notifications", label: "Notifications", icon: "notifications" as const },
   { href: "/dashboard/profile", label: "Profile", icon: "profile" as const },
 ];

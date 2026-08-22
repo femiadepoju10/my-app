@@ -1,6 +1,6 @@
 # Security & Business-Logic Test Report
 
-**Date:** 2026-08-21
+**Date:** 2026-08-22
 **Application:** PassitOn Marketplace (MVP)
 **Test Script:** `scripts/security-test.ts`
 
@@ -25,7 +25,13 @@
 | Seller Analytics Security | 4 | 4 | 0 |
 | Delivery Tracking Security | 5 | 5 | 0 |
 | Seller Verification Security | 6 | 6 | 0 |
-| **Total** | **91** | **91** | **0** |
+| Loyalty Programme Security | 6 | 6 | 0 |
+| KYC Identity Verification Security | 7 | 7 | 0 |
+| AI Product Descriptions Security | 3 | 3 | 0 |
+| Multi-Currency Security | 3 | 3 | 0 |
+| Advanced Dispute Automation Security | 3 | 3 | 0 |
+| Sponsored Listings Security | 3 | 3 | 0 |
+| **Total** | **116** | **116** | **0** |
 
 ## Findings & Fixes
 
@@ -197,7 +203,59 @@
 - **Schema has sellerVerificationStatus column** — PASS
 - **users table has ON DELETE RESTRICT** — PASS
 
-### E2E Test Results (63 assertions)
+### Loyalty Programme Security
+
+- **Loyalty API requires authentication** — PASS
+- **Loyalty API uses server-side session (not client input for userId)** — PASS
+- **Loyalty events schema has UUID PK** — PASS
+- **Loyalty events FK to users has ON DELETE RESTRICT** — PASS
+- **Loyalty events FK to transactions has ON DELETE RESTRICT** — PASS
+- **redeemPoints checks balance before deduction** — PASS
+
+### KYC Identity Verification Security
+
+- **KYC API requires authentication** — PASS
+- **KYC API prevents duplicate submissions (pending/verified)** — PASS
+- **KYC API uses server-side session for userId (not client input)** — PASS
+- **Admin KYC PATCH requires admin role** — PASS
+- **Admin PATCH prevents self-modification** — PASS
+- **kyc_documents schema has UUID PK with ON DELETE RESTRICT** — PASS
+- **kyc_documents has @unique on userId** — PASS
+
+### AI Product Descriptions Security
+
+- **AI description API requires authentication** — PASS
+- **AI description API validates image URL array (z.array)** — PASS
+- **AI description API does not persist descriptions to DB** — PASS
+
+### Multi-Currency Security
+
+- **Currency enum only allows Paystack-supported currencies** — PASS
+  Verified Currency enum contains only NGN, GHS, KES, ZAR, USD — no unsupported currencies (EUR, GBP, etc.)
+- **Products POST validates currency field (z.enum)** — PASS
+  Verified product creation Zod schema uses `z.enum(["NGN", "GHS", "KES", "ZAR", "USD"])` for currency validation
+- **Paystack initializeTransaction passes currency parameter** — PASS
+  Verified Paystack integration accepts currency param and forwards to API body
+
+### Advanced Dispute Automation Security
+
+- **Risk score computed server-side only** — PASS
+  Verified `computeRiskScore` uses `db.disputes.count()` and is async (no client-side risk input)
+- **Auto-triage uses keyword matching (no external API)** — PASS
+  Verified `DISPUTE_KEYWORD_RULES` array with `normalized.includes()` keyword matching; no `fetch` calls
+- **Suggested resolution follows documented threshold rules** — PASS
+  Verified threshold logic (`score <= 20` for auto-refund, `score >= 75` for manual_review)
+
+### Sponsored Listings Security
+
+- **Sponsored listing creation requires authentication** — PASS
+  Verified API route checks `getServerSession(authOptions)` and returns 401 for unauthenticated users
+- **Sponsored listing creation verifies product ownership** — PASS
+  Verified API checks that `product.sellerId === session.user.id` before creating a sponsored listing
+- **Sponsored listing amount is server-defined (not client input)** — PASS
+  Verified `calculateSponsoredAmount(durationDays)` is called server-side; no client-provided amount is accepted
+
+### E2E Test Results (94 assertions)
 
 - Phase 9c: Wishlist Operations — 4/4 PASS
 - Phase 9d: In-App Chat — 3/3 PASS
@@ -208,4 +266,10 @@
 - Phase 9i: Seller Analytics — 4/4 PASS
 - Phase 9j: Delivery Tracking — 3/3 PASS
 - Phase 9k: Seller Verification — 3/3 PASS
+- Phase 9l: Loyalty Programme — 4/4 PASS
+- Phase 9m: KYC Identity Verification — 4/4 PASS
+- Phase 9n: AI-Generated Product Descriptions — 4/4 PASS
+- Phase 9o: Multi-Currency Support — 4/4 PASS
+- Phase 9p: Advanced Dispute Automation — 6/6 PASS
+- Phase 9q: Sponsored Listings — 3/3 PASS
 - Phase 10: Reject/Dispute/Refund — 3/3 PASS

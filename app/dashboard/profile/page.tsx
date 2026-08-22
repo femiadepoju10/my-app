@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { User, Loader2, Banknote, Trash2, Bell } from "lucide-react";
+import { User, Loader2, Banknote, Trash2, Bell, Shield } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import PushNotificationToggle from "@/components/notifications/PushNotificationToggle";
+import Link from "next/link";
 
 interface UserProfile {
   id: string;
@@ -17,6 +18,13 @@ interface UserProfile {
   smsEnabled: boolean;
   role: string;
   paystackRecipientCode: string | null;
+  kycDocument: {
+    status: string;
+    documentType: string;
+    adminNote: string | null;
+    reviewedAt: string | null;
+    submittedAt: string;
+  } | null;
   createdAt: string;
 }
 
@@ -357,6 +365,71 @@ export default function ProfilePage() {
             </label>
           )}
         </Card>
+
+        {user.role !== "admin" && (
+          <Card padding="lg" className="mt-6">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
+                <Shield className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">Identity Verification (KYC)</h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">Verify your identity to list products for sale</p>
+              </div>
+            </div>
+
+            {user.kycDocument ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between rounded-lg bg-zinc-50 dark:bg-zinc-800 px-4 py-3">
+                  <div>
+                    <p className="font-medium text-zinc-900 dark:text-zinc-50">
+                      {user.kycDocument.status === "verified" && "Verified"}
+                      {user.kycDocument.status === "pending" && "Under Review"}
+                      {user.kycDocument.status === "rejected" && "Rejected"}
+                    </p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Document: {user.kycDocument.documentType}
+                      {user.kycDocument.reviewedAt && ` · Reviewed ${new Date(user.kycDocument.reviewedAt).toLocaleDateString()}`}
+                    </p>
+                  </div>
+                  <Badge
+                    variant={
+                      user.kycDocument.status === "verified"
+                        ? "success"
+                        : user.kycDocument.status === "pending"
+                        ? "warning"
+                        : "danger"
+                    }
+                    size="sm"
+                  >
+                    {user.kycDocument.status}
+                  </Badge>
+                </div>
+                {user.kycDocument.adminNote && (
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                    Note: {user.kycDocument.adminNote}
+                  </p>
+                )}
+                <Link href="/dashboard/kyc">
+                  <Button variant="outline" size="sm">
+                    {user.kycDocument.status === "rejected" ? "Resubmit Documents" : "Manage KYC"}
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                  You must verify your identity before you can list products for sale.
+                </p>
+                <Link href="/dashboard/kyc">
+                  <Button variant="primary" size="sm">
+                    Start KYC Verification
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </Card>
+        )}
       </div>
     );
   }

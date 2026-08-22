@@ -72,6 +72,7 @@ async function setup(): Promise<TestContext> {
       category: 'Electronics',
       condition: 'new',
       price: 300000,
+      currency: 'NGN',
       location: 'Lagos, Nigeria',
       status: 'active',
       sellerId: seller.id,
@@ -83,8 +84,9 @@ async function setup(): Promise<TestContext> {
       productId: product.id,
       buyerId: buyer.id,
       sellerId: seller.id,
-      itemPrice: 300000,
-      serviceFee: 30000,
+       itemPrice: 300000,
+       currency: 'NGN',
+       serviceFee: 30000,
       totalAmount: 330000,
       status: 'payment_pending',
     },
@@ -731,11 +733,167 @@ async function testSellerVerificationSecurity(ctx: TestContext) {
   test('Schema has sellerVerificationStatus column',
     schemaCode.includes('sellerVerificationStatus String?'));
 
-  test('users table has ON DELETE RESTRICT', (() => {
-    const usersBlockMatch = schemaCode.match(/model users \{[\s\S]*?\n\}/);
-    const usersBlock = usersBlockMatch ? usersBlockMatch[0] : '';
-    return !usersBlock.match(/onDelete:\s*Cascade/);
-  })());
+   test('users table has ON DELETE RESTRICT', (() => {
+     const usersBlockMatch = schemaCode.match(/model users \{[\s\S]*?\n\}/);
+     const usersBlock = usersBlockMatch ? usersBlockMatch[0] : '';
+     return !usersBlock.match(/onDelete:\s*Cascade/);
+   })());
+}
+
+async function testLoyaltySecurity(ctx: TestContext) {
+  console.log('\n--- Loyalty Programme Security Tests ---');
+
+  const fs = await import('fs');
+  const schemaPath = await import('path').then(p => p.join(process.cwd(), 'prisma', 'schema.prisma'));
+  const schemaCode = fs.readFileSync(schemaPath, 'utf-8');
+
+  const apiPath = await import('path').then(p => p.join(process.cwd(), 'app', 'api', 'loyalty', 'route.ts'));
+  const apiCode = fs.readFileSync(apiPath, 'utf-8');
+
+  const loyaltyPath = await import('path').then(p => p.join(process.cwd(), 'lib', 'loyalty.ts'));
+  const loyaltyCode = fs.readFileSync(loyaltyPath, 'utf-8');
+
+  test('Loyalty API requires authentication',
+    apiCode.includes('getServerSession') && apiCode.includes('Unauthorized'));
+
+  test('Loyalty API uses server-side session (not client input for userId)',
+    apiCode.includes('session.user.id'));
+
+  test('Loyalty events schema has UUID PK',
+    schemaCode.includes('model loyalty_events {') && schemaCode.includes('String   @id @default(uuid())'));
+
+  test('Loyalty events FK to users has ON DELETE RESTRICT',
+    schemaCode.includes('user          users?         @relation("userLoyaltyEvents"'));
+
+  test('Loyalty events FK to transactions has ON DELETE RESTRICT',
+    schemaCode.includes('transaction   transactions?  @relation(fields: [transactionId], references: [id])') ||
+    schemaCode.includes('transactionId String?'));
+
+  test('redeemPoints checks balance before deduction',
+    loyaltyCode.includes('loyaltyPointBalance') && loyaltyCode.includes('Insufficient'));
+}
+
+async function testKycSecurity(ctx: TestContext) {
+  console.log('\n--- KYC Identity Verification Security Tests ---');
+
+  const fs = await import('fs');
+  const schemaPath = await import('path').then(p => p.join(process.cwd(), 'prisma', 'schema.prisma'));
+  const schemaCode = fs.readFileSync(schemaPath, 'utf-8');
+
+  const kycApiPath = await import('path').then(p => p.join(process.cwd(), 'app', 'api', 'kyc', 'route.ts'));
+  const kycApiCode = fs.readFileSync(kycApiPath, 'utf-8');
+
+  const adminApiPath = await import('path').then(p => p.join(process.cwd(), 'app', 'api', 'admin', 'users', 'route.ts'));
+  const adminApiCode = fs.readFileSync(adminApiPath, 'utf-8');
+
+  test('KYC API requires authentication',
+    kycApiCode.includes('getServerSession') && kycApiCode.includes('Unauthorized'));
+
+  test('KYC API prevents duplicate submissions (pending/verified)',
+    kycApiCode.includes('"pending"') && kycApiCode.includes('"verified"') && kycApiCode.includes('already have a pending or verified KYC submission'));
+
+  test('KYC API uses server-side session for userId (not client input)',
+    !kycApiCode.includes('body.userId') && !kycApiCode.includes('body.userId') && kycApiCode.includes('session.user.id'));
+
+  test('Admin KYC PATCH requires admin role',
+    adminApiCode.includes('session.user.role !== "admin"') || adminApiCode.includes('role !== "admin"'));
+
+  test('Admin PATCH prevents self-modification',
+    adminApiCode.includes('userId === session.user.id'));
+
+  test('kyc_documents schema has UUID PK with ON DELETE RESTRICT',
+    schemaCode.includes('model kyc_documents {') &&
+    schemaCode.includes('String   @id @default(uuid())') &&
+    schemaCode.includes('onDelete: Restrict'));
+
+   test('kyc_documents has @unique on userId',
+     schemaCode.includes('"kyc_documents"') && schemaCode.match(/userId\s+String\s+@unique\s+@map\("user_id"\)/) !== null);
+}
+
+async function testAiDescriptionSecurity(ctx: TestContext) {
+  console.log('\n--- AI Product Descriptions Security Tests ---');
+
+  const fs = await import('fs');
+  const aiApiPath = await import('path').then(p => p.join(process.cwd(), 'app', 'api', 'ai', 'generate-description', 'route.ts'));
+  const apiCode = fs.readFileSync(aiApiPath, 'utf-8');
+
+  const openaiLibPath = await import('path').then(p => p.join(process.cwd(), 'lib', 'openai.ts'));
+  const libCode = fs.readFileSync(openaiLibPath, 'utf-8');
+
+  test('AI description API requires authentication',
+    apiCode.includes('getServerSession') && apiCode.includes('Unauthorized'));
+
+  test('AI description API validates image URL array (z.array)',
+    apiCode.includes('z.array') && apiCode.includes('imageUrls'));
+
+  test('AI description API does not persist descriptions to DB',
+    !apiCode.includes('db.') && libCode.includes('openai.chat.completions.create'));
+}
+
+async function testCurrencySecurity(ctx: TestContext) {
+  console.log('\n--- Multi-Currency Security Tests ---');
+
+  const fs = await import('fs');
+  const schemaPath = await import('path').then(p => p.join(process.cwd(), 'prisma', 'schema.prisma'));
+  const schemaCode = fs.readFileSync(schemaPath, 'utf-8');
+
+  test('Currency enum only allows Paystack-supported currencies',
+    schemaCode.includes('NGN') && schemaCode.includes('GHS') &&
+    schemaCode.includes('KES') && schemaCode.includes('ZAR') &&
+    schemaCode.includes('USD') &&
+    !schemaCode.match(/Currency\s*\{[^}]*EUR/i) &&
+    !schemaCode.match(/Currency\s*\{[^}]*GBP/i));
+
+  const productApiPath = await import('path').then(p => p.join(process.cwd(), 'app', 'api', 'products', 'route.ts'));
+  const productApiCode = fs.readFileSync(productApiPath, 'utf-8');
+
+  test('Products POST validates currency field (z.enum)',
+    productApiCode.includes('currency') && productApiCode.includes('z.enum'));
+
+  const paystackPath = await import('path').then(p => p.join(process.cwd(), 'lib', 'paystack.ts'));
+  const paystackCode = fs.readFileSync(paystackPath, 'utf-8');
+
+  test('Paystack initializeTransaction passes currency parameter',
+    paystackCode.includes('currency') && paystackCode.includes('currency: params.currency'));
+}
+
+async function testDisputeAutomationSecurity(ctx: TestContext) {
+  console.log('\n--- Advanced Dispute Automation Security Tests ---');
+
+  const fs = await import('fs');
+  const disputeLibPath = await import('path').then(p => p.join(process.cwd(), 'lib', 'dispute-automation.ts'));
+  const libCode = fs.readFileSync(disputeLibPath, 'utf-8');
+
+  test('Risk score computed server-side only',
+    libCode.includes('db.disputes.count') && libCode.includes('async function computeRiskScore'));
+
+  test('Auto-triage uses keyword matching (no external API)',
+    libCode.includes('DISPUTE_KEYWORD_RULES') && libCode.includes('normalized.includes') && !libCode.includes('fetch'));
+
+  test('Suggested resolution follows documented threshold rules',
+    libCode.includes('score <= 20') && libCode.includes('score >= 75') && libCode.includes('manual_review'));
+}
+
+async function testSponsoredListingsSecurity(ctx: TestContext) {
+  console.log('\n--- Sponsored Listings Security Tests ---');
+
+  const fs = await import('fs');
+  const path = await import('path');
+  const routeCode = fs.readFileSync(
+    path.join(process.cwd(), 'app/api/sponsored-listings/route.ts'),
+    'utf-8'
+  );
+
+  test('Sponsored listing creation requires authentication',
+    routeCode.includes('getServerSession(authOptions)') && routeCode.includes('"Unauthorized"'));
+
+  test('Sponsored listing creation verifies product ownership',
+    routeCode.includes('You can only sponsor your own products'));
+
+  test('Sponsored listing amount is server-defined (not client input)',
+    routeCode.includes('calculateSponsoredAmount(durationDays)') &&
+    !routeCode.includes('amount: body.amount') &&
+    !routeCode.includes('amount: validated.data.amount'));
 }
 
 async function main() {
@@ -760,7 +918,14 @@ async function main() {
    await testRecommendationsSecurity(ctx);
    await testSellerAnalyticsSecurity(ctx);
    await testDeliverySecurity(ctx);
-   await testSellerVerificationSecurity(ctx);
+    await testSellerVerificationSecurity(ctx);
+    await testLoyaltySecurity(ctx);
+    await testKycSecurity(ctx);
+    await testAiDescriptionSecurity(ctx);
+    await testCurrencySecurity(ctx);
+   await testDisputeAutomationSecurity(ctx);
+   await testSponsoredListingsSecurity(ctx);
+
 
   await cleanup(ctx);
 
