@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import { db } from "@/lib/db";
+import { getSellerRating } from "@/lib/analytics";
 import { z } from "zod";
 import cloudinary from "@/lib/cloudinary";
 
@@ -20,9 +21,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const productId = parseInt(id, 10);
+  const productId = id;
 
-  if (isNaN(productId)) {
+  if (!productId) {
     return NextResponse.json({ error: "Invalid product ID" }, { status: 400 });
   }
 
@@ -39,12 +40,14 @@ export async function GET(
     orderBy: { sortOrder: "asc" },
   });
 
-  const seller = await db.users.findUnique({
-    where: { id: product.sellerId },
-    select: { id: true, name: true, createdAt: true },
-  });
+   const seller = await db.users.findUnique({
+     where: { id: product.sellerId },
+     select: { id: true, name: true, createdAt: true, sellerVerificationStatus: true },
+   });
 
-  return NextResponse.json({ product: { ...product, images, seller } });
+  const sellerRating = await getSellerRating(product.sellerId);
+
+  return NextResponse.json({ product: { ...product, images, seller, sellerRating } });
 }
 
 export async function PATCH(
@@ -57,7 +60,7 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const productId = parseInt(id, 10);
+  const productId = id;
 
   const existing = await db.products.findUnique({
     where: { id: productId },
@@ -67,7 +70,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
   }
 
-  if (existing.sellerId !== parseInt(session.user.id)) {
+  if (existing.sellerId !== session.user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -146,7 +149,7 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  const productId = parseInt(id, 10);
+  const productId = id;
 
   const existing = await db.products.findUnique({
     where: { id: productId },
@@ -156,7 +159,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
   }
 
-  if (existing.sellerId !== parseInt(session.user.id)) {
+  if (existing.sellerId !== session.user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

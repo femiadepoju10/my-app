@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import { db } from "@/lib/db";
-import { initializeTransaction } from "@/lib/paystack";
+import { initializeTransaction, initiateTransfer, createTransferRecipient, initiateRefund } from "@/lib/paystack";
 import { sendTransactionEmail } from "@/lib/email";
 import { notifyTransactionParticipants } from "@/lib/notifications";
 import crypto from "crypto";
@@ -17,9 +17,9 @@ export async function GET(
   }
 
   const { id } = await params;
-  const transactionId = parseInt(id, 10);
+  const transactionId = id;
 
-  if (isNaN(transactionId)) {
+  if (!transactionId) {
     return NextResponse.json(
       { error: "Invalid transaction ID" },
       { status: 400 }
@@ -37,7 +37,7 @@ export async function GET(
     );
   }
 
-  const userId = parseInt(session.user.id);
+  const userId = session.user.id;
   if (
     transaction.buyerId !== userId &&
     transaction.sellerId !== userId &&
@@ -79,6 +79,10 @@ export async function GET(
     where: { transactionId },
   });
 
+  const review = await db.reviews.findUnique({
+    where: { transactionId },
+  });
+
   return NextResponse.json({
     transaction: {
       ...transaction,
@@ -88,6 +92,7 @@ export async function GET(
       payment,
       payout,
       refund,
+      review,
     },
   });
 }
@@ -118,9 +123,9 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const transactionId = parseInt(id, 10);
+  const transactionId = id;
 
-  if (isNaN(transactionId)) {
+  if (!transactionId) {
     return NextResponse.json(
       { error: "Invalid transaction ID" },
       { status: 400 }
@@ -138,7 +143,7 @@ export async function PATCH(
     );
   }
 
-  const userId = parseInt(session.user.id);
+  const userId = session.user.id;
   const isBuyer = transaction.buyerId === userId;
   const isSeller = transaction.sellerId === userId;
 
@@ -238,6 +243,68 @@ export async function PATCH(
 
   const finalStatus = newStatus === "accepted" ? "payout_pending" : newStatus;
 
+  let transferReference: string | null = null;
+  let refundReference: string | null = null;
+
+  if (finalStatus === "payout_completed") {
+    const seller = await db.users.findUnique({
+      where: { id: transaction.sellerId },
+      select: { id: true, name: true, paystackRecipientCode: true },
+    });
+
+    if (!seller?.paystackRecipientCode) {
+      return NextResponse.json(
+        { error: "Seller has no Paystack recipient set up. Cannot initiate payout." },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const transferResult = await initiateTransfer({
+        amount: transaction.itemPrice,
+        recipient: seller.paystackRecipientCode,
+        reason: `PassitOn payout for transaction ${transaction.id}`,
+      });
+      transferReference = transferResult.reference;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to initiate payout";
+      return NextResponse.json(
+        { error: message },
+        { status: 502 }
+      );
+    }
+  }
+
+  if (finalStatus === "refund_completed") {
+    const payment = await db.payments.findFirst({
+      where: { transactionId },
+      select: { paystackRef: true, amount: true, status: true },
+    });
+
+    if (!payment?.paystackRef) {
+      return NextResponse.json(
+        { error: "No payment reference found for this transaction" },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const refundResult = await initiateRefund({
+        transaction: payment.paystackRef,
+        amount: payment.amount,
+      });
+      refundReference = refundResult.reference;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to initiate refund";
+      return NextResponse.json(
+        { error: message },
+        { status: 502 }
+      );
+    }
+  }
+
   await db.$transaction(async (tx) => {
     if (finalStatus === "payment_confirmed" || finalStatus === "payout_pending" || finalStatus === "completed") {
       await tx.products.update({
@@ -290,14 +357,21 @@ export async function PATCH(
     if (finalStatus === "payout_completed") {
       await tx.payouts.updateMany({
         where: { transactionId },
-        data: { status: "completed", paidAt: new Date().toISOString() },
+        data: {
+          status: "processing",
+          paystackRef: transferReference,
+          paidAt: new Date().toISOString(),
+        },
       });
     }
 
     if (finalStatus === "refund_completed") {
       await tx.refunds.updateMany({
         where: { transactionId },
-        data: { status: "completed" },
+        data: {
+          status: "processing",
+          paystackRef: refundReference,
+        },
       });
     }
 
@@ -312,7 +386,16 @@ export async function PATCH(
   } else if (newStatus !== "payout_pending") {
     sendTransactionEmail(transactionId, finalStatus).catch(() => {});
   }
-  notifyTransactionParticipants(transactionId, finalStatus).catch(() => {});
+
+  if (finalStatus === "payout_completed") {
+    sendTransactionEmail(transactionId, "payout_initiated").catch(() => {});
+    notifyTransactionParticipants(transactionId, "payout_initiated").catch(() => {});
+  } else if (finalStatus === "refund_completed") {
+    sendTransactionEmail(transactionId, "refund_initiated").catch(() => {});
+    notifyTransactionParticipants(transactionId, "refund_initiated").catch(() => {});
+  } else {
+    notifyTransactionParticipants(transactionId, finalStatus).catch(() => {});
+  }
 
   return NextResponse.json({ success: true, status: finalStatus });
 }
@@ -327,9 +410,9 @@ export async function POST(
   }
 
   const { id } = await params;
-  const transactionId = parseInt(id, 10);
+  const transactionId = id;
 
-  if (isNaN(transactionId)) {
+  if (!transactionId) {
     return NextResponse.json(
       { error: "Invalid transaction ID" },
       { status: 400 }
@@ -347,7 +430,7 @@ export async function POST(
     );
   }
 
-  const userId = parseInt(session.user.id);
+  const userId = session.user.id;
   if (transaction.buyerId !== userId) {
     return NextResponse.json(
       { error: "Only the buyer can initiate payment" },
@@ -363,7 +446,7 @@ export async function POST(
   }
 
   const reference = "SB_" + crypto.randomBytes(8).toString("hex").toUpperCase();
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
   const callbackUrl = `${baseUrl}/checkout/${transaction.id}?reference=${reference}`;
 
   await db.payments.create({

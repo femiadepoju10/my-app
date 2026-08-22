@@ -1,30 +1,58 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Avatar } from "@/components/ui/Avatar";
 import EmptyState from "@/components/ui/EmptyState";
-import { Loader2, Search, UserPlus, Shield, Trash2 } from "lucide-react";
+import { Loader2, Search, UserPlus, Shield, Trash2, Banknote } from "lucide-react";
+import { useToast } from "@/components/ui/Toast";
 
-interface User {
-  id: number;
-  name: string;
-  email: string;
-  phone: string | null;
-  role: string;
-  createdAt: string;
-  transactionCount: number;
+ interface User {
+   id: string;
+   name: string;
+   email: string;
+   phone: string | null;
+   role: string;
+   paystackRecipientCode: string | null;
+   sellerVerificationStatus: string | null;
+   verificationNote: string | null;
+   createdAt: string;
+   transactionCount: number;
 }
+
+const NIGERIAN_BANKS = [
+  { code: "000001", name: "Access Bank" },
+  { code: "000007", name: "Fcmb" },
+  { code: "000009", name: "First Bank" },
+  { code: "000010", name: "GTBank" },
+  { code: "000013", name: "Jaiz Bank" },
+  { code: "000014", name: "Kuda Bank" },
+  { code: "000015", name: "Polaris Bank" },
+  { code: "000016", name: "Stanbic IBTC" },
+  { code: "000017", name: "Sterling Bank" },
+  { code: "000018", name: "Suntrust Bank" },
+  { code: "000019", name: "Taj Bank" },
+  { code: "000020", name: "Union Bank" },
+  { code: "000021", name: "UBA" },
+  { code: "000022", name: "Unity Bank" },
+  { code: "000023", name: "Wema Bank" },
+  { code: "000024", name: "Zenith Bank" },
+];
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState<number | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [payoutSetupUser, setPayoutSetupUser] = useState<User | null>(null);
+  const [accountNumber, setAccountNumber] = useState("");
+  const [bankCode, setBankCode] = useState("");
+  const [showPendingOnly, setShowPendingOnly] = useState(false);
+  const { addToast } = useToast();
 
   useEffect(() => {
     async function fetchUsers() {
@@ -38,7 +66,7 @@ export default function AdminUsersPage() {
     fetchUsers();
   }, []);
 
-  async function toggleRole(userId: number, currentRole: string, userName: string) {
+  async function toggleRole(userId: string, currentRole: string, userName: string) {
     const newRole = currentRole === "admin" ? "user" : "admin";
     const action = newRole === "admin" ? "promote" : "demote";
     if (!confirm(`Are you sure you want to ${action} ${userName}?`)) return;
@@ -59,7 +87,7 @@ export default function AdminUsersPage() {
     }
   }
 
-  async function handleDelete(userId: number, userName: string) {
+  async function handleDelete(userId: string, userName: string) {
     if (!confirm(`Are you sure you want to remove ${userName}? This action can be undone by an admin.`)) return;
     setDeleteLoading(userId);
     try {
@@ -76,11 +104,85 @@ export default function AdminUsersPage() {
     }
   }
 
-  const filteredUsers = users.filter(
-    (u) =>
+  async function handlePayoutSetup(userId: string) {
+    setActionLoading(userId);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          accountNumber,
+          bankCode,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === userId
+              ? { ...u, paystackRecipientCode: data.paystackRecipientCode || null }
+              : u
+          )
+        );
+        setPayoutSetupUser(null);
+        setAccountNumber("");
+        setBankCode("");
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to set up payout");
+      }
+    } finally {
+      setActionLoading(null);
+     }
+   }
+
+  async function handleVerification(userId: string, status: "verified" | "rejected", userName: string) {
+    let note = "";
+    if (status === "rejected") {
+      note = prompt(`Enter rejection reason for ${userName}:`) || "";
+      if (!note) return;
+    }
+    setActionLoading(userId);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, sellerVerificationStatus: status, verificationNote: note }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === userId
+              ? {
+                  ...u,
+                  sellerVerificationStatus: status,
+                  verificationNote: note,
+                  ...(data.verifiedAt && { verifiedAt: data.verifiedAt }),
+                }
+              : u
+          )
+        );
+        addToast(`Seller ${status}`, "success");
+      } else {
+        const data = await res.json();
+        addToast(data.error || "Verification update failed", "error");
+      }
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  const filteredUsers = users.filter((u) => {
+    const matchesSearch =
       u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase())
-  );
+      u.email.toLowerCase().includes(search.toLowerCase());
+    const matchesFilter = showPendingOnly
+      ? u.sellerVerificationStatus === "pending"
+      : true;
+    return matchesSearch && matchesFilter;
+  });
 
   return (
     <div className="animate-fade-in">
@@ -96,6 +198,17 @@ export default function AdminUsersPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
           />
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <input
+              type="checkbox"
+              checked={showPendingOnly}
+              onChange={(e) => setShowPendingOnly(e.target.checked)}
+              className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            Pending verification only
+          </label>
         </div>
       </div>
 
@@ -120,9 +233,11 @@ export default function AdminUsersPage() {
                 <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Email</th>
                 <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Phone</th>
                 <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Role</th>
-                <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Transactions</th>
+               <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Transactions</th>
+                 <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Payout</th>
+                <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Verification</th>
                 <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Joined</th>
-                <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Action</th>
+               <th className="px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -145,34 +260,158 @@ export default function AdminUsersPage() {
                       {user.role}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{user.transactionCount}</td>
-                  <td className="px-4 py-3 text-zinc-500">{new Date(user.createdAt).toLocaleDateString()}</td>
+               <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{user.transactionCount}</td>
+               <td className="px-4 py-3">
+                 {user.paystackRecipientCode ? (
+                   <Badge variant="success" size="sm">Ready</Badge>
+                 ) : (
+                   <Badge variant="warning" size="sm">Not Set Up</Badge>
+                 )}
+                </td>
+               <td className="px-4 py-3">
+                 {user.sellerVerificationStatus === "verified" ? (
+                   <Badge variant="success" size="sm">Verified</Badge>
+                 ) : user.sellerVerificationStatus === "pending" ? (
+                   <Badge variant="warning" size="sm">Pending</Badge>
+                 ) : user.sellerVerificationStatus === "rejected" ? (
+                   <Badge variant="danger" size="sm">Rejected</Badge>
+                 ) : (
+                   <Badge variant="default" size="sm">—</Badge>
+                 )}
+               </td>
+                <td className="px-4 py-3 text-zinc-500">{new Date(user.createdAt).toLocaleDateString()}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant={user.role === "admin" ? "destructive" : "primary"}
-                        size="sm"
-                        onClick={() => toggleRole(user.id, user.role, user.name)}
-                        isLoading={actionLoading === user.id}
-                      >
-                        <Shield className="h-3 w-3" />
-                        {user.role === "admin" ? "Demote" : "Promote"}
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDelete(user.id, user.name)}
-                        isLoading={deleteLoading === user.id}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                        Remove
-                      </Button>
-                    </div>
+                   <div className="flex items-center gap-2">
+                     {user.sellerVerificationStatus === "pending" && (
+                       <div className="flex items-center gap-1">
+                         <Button
+                           variant="success"
+                           size="sm"
+                           onClick={() => handleVerification(user.id, "verified", user.name)}
+                           isLoading={actionLoading === user.id}
+                         >
+                           Verify
+                         </Button>
+                         <Button
+                           variant="destructive"
+                           size="sm"
+                           onClick={() => handleVerification(user.id, "rejected", user.name)}
+                           isLoading={actionLoading === user.id}
+                           outline
+                         >
+                           Reject
+                         </Button>
+                       </div>
+                     )}
+                     {user.sellerVerificationStatus === "rejected" && (
+                       <Button
+                         variant="outline"
+                         size="sm"
+                         onClick={() => handleVerification(user.id, "verified", user.name)}
+                         isLoading={actionLoading === user.id}
+                       >
+                         Re-verify
+                       </Button>
+                     )}
+                     {!user.paystackRecipientCode && (
+                       <Button
+                         variant="outline"
+                         size="sm"
+                         onClick={() => setPayoutSetupUser(user)}
+                       >
+                         <Banknote className="h-3 w-3" />
+                         Set Up Payout
+                       </Button>
+                     )}
+                     <Button
+                       variant={user.role === "admin" ? "destructive" : "primary"}
+                       size="sm"
+                       onClick={() => toggleRole(user.id, user.role, user.name)}
+                       isLoading={actionLoading === user.id}
+                     >
+                       <Shield className="h-3 w-3" />
+                       {user.role === "admin" ? "Demote" : "Promote"}
+                     </Button>
+                     <Button
+                       variant="destructive"
+                       size="sm"
+                       onClick={() => handleDelete(user.id, user.name)}
+                       isLoading={deleteLoading === user.id}
+                     >
+                       <Trash2 className="h-3 w-3" />
+                       Remove
+                     </Button>
+                   </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {payoutSetupUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-zinc-900 p-6 shadow-xl">
+            <h3 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              Set Up Payout for {payoutSetupUser.name}
+            </h3>
+            <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+              Enter the seller's Nigerian bank account details to create a Paystack transfer recipient.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Bank
+                </label>
+                <select
+                  value={bankCode}
+                  onChange={(e) => setBankCode(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+                  required
+                >
+                  <option value="">Select bank</option>
+                  {NIGERIAN_BANKS.map((bank) => (
+                    <option key={bank.code} value={bank.code}>
+                      {bank.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Account Number
+                </label>
+                <Input
+                  type="text"
+                  placeholder="0123456789"
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setPayoutSetupUser(null);
+                  setAccountNumber("");
+                  setBankCode("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => handlePayoutSetup(payoutSetupUser.id)}
+                isLoading={actionLoading === payoutSetupUser.id}
+                disabled={!accountNumber || !bankCode}
+              >
+                {actionLoading === payoutSetupUser.id ? "Setting Up..." : "Create Payout Recipient"}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

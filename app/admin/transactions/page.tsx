@@ -11,7 +11,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import { Loader2, Search, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Transaction {
-  id: number;
+  id: string;
   itemPrice: number;
   serviceFee: number;
   totalAmount: number;

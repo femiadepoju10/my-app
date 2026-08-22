@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 
 interface Notification {
-  id: number;
+  id: string;
   type: string;
   message: string;
   readAt: string | null;
@@ -36,7 +36,7 @@ export default function NotificationsPage() {
     fetchNotifications();
   }, []);
 
-  async function markAsRead(id: number) {
+  async function markAsRead(id: string) {
     try {
       await fetch(`/api/notifications/${id}`, { method: "PATCH" });
       setNotifications((prev) =>

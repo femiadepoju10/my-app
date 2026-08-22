@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Bell, Check, Loader2 } from "lucide-react";
 
 interface Notification {
-  id: number;
+  id: string;
   type: string;
   message: string;
   readAt: string | null;
@@ -37,7 +37,7 @@ export default function NotificationBell() {
     fetchNotifications();
   }, []);
 
-  async function markAsRead(id: number) {
+  async function markAsRead(id: string) {
     try {
       await fetch(`/api/notifications/${id}`, { method: "PATCH" });
       setNotifications((prev) =>

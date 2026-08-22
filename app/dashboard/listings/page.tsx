@@ -15,7 +15,7 @@ interface ProductImage {
 }
 
 interface Product {
-  id: number;
+  id: string;
   title: string;
   price: number;
   condition: string;
@@ -35,7 +35,7 @@ const statusVariantMap: Record<string, "default" | "primary" | "success" | "warn
 export default function MyListingsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchListings() {
@@ -49,7 +49,7 @@ export default function MyListingsPage() {
     fetchListings();
   }, []);
 
-  async function handleDelete(id: number) {
+  async function handleDelete(id: string) {
     if (!confirm("Are you sure you want to remove this listing?")) return;
     setDeleting(id);
     const res = await fetch(`/api/products/${id}`, { method: "DELETE" });

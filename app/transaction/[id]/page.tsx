@@ -17,11 +17,12 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Separator } from "@/components/ui/Separator";
 import { Avatar } from "@/components/ui/Avatar";
+import ChatBox from "@/components/chat/ChatBox";
 
 interface TransactionData {
-  id: number;
-  buyerId: number;
-  sellerId: number;
+  id: string;
+  buyerId: string;
+  sellerId: string;
   itemPrice: number;
   serviceFee: number;
   totalAmount: number;
@@ -32,18 +33,32 @@ interface TransactionData {
   rejectionPhotos: string | null;
   disputeNote: string | null;
   product: {
-    id: number;
+    id: string;
     title: string;
     description: string;
     condition: string;
     location: string;
     images: { imageUrl: string }[];
   } | null;
-  buyer: { id: number; name: string; email: string; phone: string | null } | null;
-  seller: { id: number; name: string; email: string; phone: string | null } | null;
+  buyer: { id: string; name: string; email: string; phone: string | null } | null;
+  seller: { id: string; name: string; email: string; phone: string | null } | null;
   payment: { status: string; paidAt: string | null } | null;
   payout: { status: string; amount: number; paidAt: string | null } | null;
   refund: { status: string; amount: number; reason: string | null } | null;
+   review: { id: string; rating: number; comment: string | null; createdAt: string } | null;
+}
+
+interface DeliveryTrackingData {
+  id: string;
+  transactionId: string;
+  status: string;
+  shippedAt: string | null;
+  shippedNote: string | null;
+  deliveredAt: string | null;
+  deliveredNote: string | null;
+  proofPhoto: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 const STATUS_STEPS = [
@@ -89,17 +104,29 @@ function TransactionContent() {
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectPhotos, setRejectPhotos] = useState<string[]>([]);
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [deliveryTracking, setDeliveryTracking] = useState<DeliveryTrackingData | null>(null);
+  const [deliveringItem, setDeliveringItem] = useState(false);
+  const [deliverProofPhoto, setDeliverProofPhoto] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       const res = await fetch(`/api/transactions/${params.id}`);
-      if (!cancelled && res.ok) {
-        const data = await res.json();
-        setTransaction(data.transaction);
-      } else if (!cancelled && res.status === 403) {
+       if (!cancelled && res.ok) {
+         const data = await res.json();
+         setTransaction(data.transaction);
+
+         const trackingRes = await fetch(`/api/delivery/${data.transaction.id}`);
+         if (trackingRes.ok && !cancelled) {
+           const trackingData = await trackingRes.json();
+           setDeliveryTracking(trackingData.tracking || null);
+         }
+       } else if (!cancelled && res.status === 403) {
         router.push("/dashboard");
         return;
       } else if (!cancelled && res.status === 401) {
@@ -130,6 +157,78 @@ function TransactionContent() {
       } else {
         const data = await res.json();
         addToast(data.error || "Action failed", "error");
+      }
+     } catch {
+      addToast("Something went wrong", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleDeliveryUpdate(status: string, note?: string, proofPhoto?: string) {
+    if (!transaction) return;
+    setDeliveringItem(true);
+    try {
+      const res = await fetch(`/api/delivery/${transaction.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, note, proofPhoto }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDeliveryTracking(data.tracking);
+        if (data.transactionUpdated) {
+          const refresh = await fetch(`/api/transactions/${transaction.id}`);
+          if (refresh.ok) {
+            const refreshed = await refresh.json();
+            setTransaction(refreshed.transaction);
+          }
+        }
+        addToast(`Delivery status updated to ${status.replace("_", " ")}`, "success");
+      } else {
+        const data = await res.json();
+        addToast(data.error || "Delivery update failed", "error");
+      }
+    } catch {
+      addToast("Something went wrong", "error");
+    } finally {
+      setDeliveringItem(false);
+    }
+  }
+
+  async function handleReviewSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!transaction) return;
+    setActionLoading(true);
+    try {
+      const revieweeId = transaction.buyerId === session?.user?.id
+        ? transaction.sellerId
+        : transaction.buyerId;
+
+      const res = await fetch("/api/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transactionId: transaction.id,
+          revieweeId,
+          rating,
+          comment,
+        }),
+      });
+
+      if (res.ok) {
+        const refresh = await fetch(`/api/transactions/${transaction.id}`);
+        if (refresh.ok) {
+          const refreshed = await refresh.json();
+          setTransaction(refreshed.transaction);
+        }
+        setShowReviewModal(false);
+        setRating(5);
+        setComment("");
+        addToast("Review submitted successfully", "success");
+      } else {
+        const data = await res.json();
+        addToast(data.error || "Failed to submit review", "error");
       }
     } catch {
       addToast("Something went wrong", "error");
@@ -359,12 +458,124 @@ function TransactionContent() {
         </div>
       </div>
 
+      {/* Delivery Tracking Card */}
+      {transaction.status === "seller_contacted" && (
+        <Card padding="lg" className="mb-6">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30">
+              <Truck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Delivery Tracking</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                {deliveryTracking?.status === "in_transit"
+                  ? "Your item is on the way"
+                  : deliveryTracking?.status === "delivered"
+                  ? "Item marked as delivered — awaiting your confirmation"
+                  : "Arrange handover with the " + (isBuyer ? "seller" : "buyer")}
+              </p>
+            </div>
+          </div>
+
+          {deliveryTracking && deliveryTracking.status !== "shipping" && (
+            <div className="space-y-3">
+              {deliveryTracking.shippedAt && (
+                <div className="flex items-start gap-3">
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/30">
+                    <div className="h-2 w-2 rounded-full bg-indigo-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">In Transit</p>
+                    <p className="text-xs text-zinc-500">{new Date(deliveryTracking.shippedAt).toLocaleString()}</p>
+                  </div>
+                </div>
+              )}
+              {deliveryTracking.deliveredAt && (
+                <div className="flex items-start gap-3">
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+                    <div className="h-2 w-2 rounded-full bg-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Delivered</p>
+                    <p className="text-xs text-zinc-500">{new Date(deliveryTracking.deliveredAt).toLocaleString()}</p>
+                    {deliveryTracking.deliveredNote && (
+                      <p className="mt-1 text-xs text-zinc-500">Note: {deliveryTracking.deliveredNote}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+              {deliveryTracking.proofPhoto && (
+                <div className="mt-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={deliveryTracking.proofPhoto} alt="Delivery proof" className="h-24 w-24 rounded-xl object-cover" />
+                </div>
+              )}
+            </div>
+          )}
+
+          {deliveryTracking?.status === "confirmed" && (
+            <div className="mt-3 rounded-xl bg-emerald-50 p-3 dark:bg-emerald-900/20">
+              <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                Delivery confirmed by buyer — proceeding to inspection
+              </p>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Action Buttons */}
       <div className="mb-8 space-y-3">
         {transaction.status === "seller_contacted" && isSeller && (
-          <Button onClick={() => handleStatusChange("item_delivered")} isLoading={actionLoading} className="w-full">
-            <Truck className="h-4 w-4" />
-            {actionLoading ? "Updating..." : "Mark as Delivered"}
+          <>
+            {deliveryTracking && deliveryTracking.status === "shipping" && (
+              <Button
+                onClick={() => handleDeliveryUpdate("in_transit")}
+                isLoading={deliveringItem}
+                className="w-full"
+              >
+                <Package className="h-4 w-4" />
+                {deliveringItem ? "Updating..." : "Mark as In Transit"}
+              </Button>
+            )}
+            {deliveryTracking && deliveryTracking.status === "in_transit" && (
+              <Button
+                onClick={() => {
+                  const photo = deliverProofPhoto;
+                  if (photo) {
+                    handleDeliveryUpdate("delivered", deliverProofPhoto ? undefined : undefined, photo);
+                  } else {
+                    handleDeliveryUpdate("delivered");
+                  }
+                }}
+                isLoading={deliveringItem}
+                className="w-full"
+              >
+                <Truck className="h-4 w-4" />
+                {deliveringItem ? "Updating..." : "Mark as Delivered"}
+              </Button>
+            )}
+            {!deliveryTracking && (
+              <Button
+                onClick={() => handleDeliveryUpdate("in_transit")}
+                isLoading={deliveringItem}
+                className="w-full"
+              >
+                <Package className="h-4 w-4" />
+                {deliveringItem ? "Updating..." : "Mark as In Transit"}
+              </Button>
+            )}
+          </>
+        )}
+
+        {deliveryTracking && deliveryTracking.status === "delivered" && isBuyer && (
+          <Button
+            onClick={() => handleDeliveryUpdate("confirmed")}
+            isLoading={deliveringItem}
+            className="w-full"
+            variant="success"
+          >
+            <CheckCircle className="h-4 w-4" />
+            {deliveringItem ? "Confirming..." : "Confirm Receipt"}
           </Button>
         )}
 
@@ -405,14 +616,14 @@ function TransactionContent() {
         {transaction.status === "refund_pending" && isAdmin && (
           <Button onClick={() => handleStatusChange("refund_completed")} isLoading={actionLoading} className="w-full">
             {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
-            {actionLoading ? "Updating..." : "Process Refund"}
+            {actionLoading ? "Initiating Refund..." : "Initiate Refund"}
           </Button>
         )}
 
         {transaction.status === "payout_pending" && isAdmin && (
           <Button onClick={() => handleStatusChange("payout_completed")} isLoading={actionLoading} className="w-full">
-            {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-            {actionLoading ? "Updating..." : "Mark Payout Complete"}
+            {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
+            {actionLoading ? "Initiating Payout..." : "Initiate Payout"}
           </Button>
         )}
 
@@ -588,6 +799,55 @@ function TransactionContent() {
             )}
           </div>
         </Card>
+       )}
+
+      {(transaction.status === "completed" || transaction.status === "refund_completed") &&
+       !transaction.review && (
+        <Card padding="lg" className="mb-8">
+          <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            Rate Your Transaction Partner
+          </h3>
+          <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+            You've completed a transaction with{" "}
+            {transaction.buyerId === session?.user?.id
+              ? transaction.seller?.name
+              : transaction.buyer?.name}.
+            Leave a rating to help build trust in the community.
+          </p>
+          <Button
+            onClick={() => setShowReviewModal(true)}
+            size="sm"
+            className="w-full sm:w-auto"
+          >
+            <ThumbsUp className="h-4 w-4" />
+            Write a Review
+          </Button>
+        </Card>
+      )}
+
+      {transaction.review && (
+        <Card padding="lg" className="mb-8">
+          <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            Your Review
+          </h3>
+          <div className="flex items-center gap-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <ThumbsUp
+                key={i}
+                className={`h-4 w-4 ${
+                  i < transaction.review!.rating
+                    ? "fill-yellow-400 text-yellow-400"
+                    : "text-zinc-300"
+                }`}
+              />
+            ))}
+          </div>
+          {transaction.review.comment && (
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              {transaction.review.comment}
+            </p>
+          )}
+        </Card>
       )}
 
       {/* Product Info */}
@@ -681,7 +941,83 @@ function TransactionContent() {
               </div>
             </div>
           </div>
-        </Card>
+         </Card>
+       )}
+
+       {/* In-App Chat */}
+       {currentStepIndex >= 1 && transaction.buyer && transaction.seller && (
+         <Card padding="none" className="mb-8 overflow-hidden">
+           <div className="border-b border-zinc-100 bg-zinc-50 px-6 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+             <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+               <MessageSquare className="h-4 w-4" />
+               Messages
+             </h3>
+           </div>
+           <div className="p-6">
+             <ChatBox transactionId={transaction.id} />
+           </div>
+         </Card>
+       )}
+
+       {showReviewModal && transaction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-zinc-900 p-6 shadow-xl">
+            <h3 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              Write a Review
+            </h3>
+            <form onSubmit={handleReviewSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  Rating
+                </label>
+                <div className="flex gap-1">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      value={i + 1}
+                      onClick={() => setRating(i + 1)}
+                      className="p-0.5 hover:scale-110 transition-transform"
+                    >
+                      <ThumbsUp
+                        className={`h-6 w-6 ${
+                          i < rating
+                            ? "fill-yellow-400 text-yellow-400"
+                            : "text-zinc-300"
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  Comment (optional)
+                </label>
+                <textarea
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder="What did you like or dislike?"
+                  rows={3}
+                  className="block w-full rounded-lg border border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none resize-none"
+                />
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowReviewModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm" isLoading={actionLoading}>
+                  Submit Review
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

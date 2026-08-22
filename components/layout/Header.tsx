@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { getServerSession } from "next-auth";
-import { signOut } from "next-auth/react";
-import { Handshake, ShoppingCart, Tag, LayoutDashboard, Shield, LogOut } from "lucide-react";
+import { Handshake, ShoppingCart, Tag, LayoutDashboard, Shield } from "lucide-react";
 import MobileMenu from "./MobileMenu";
 import NotificationBell from "./NotificationBell";
+import LogoutButton from "./LogoutButton";
 import BrandName from "@/components/ui/BrandName";
 import { authOptions } from "@/auth";
 
@@ -60,18 +60,11 @@ export default async function Header() {
                 <LayoutDashboard className="h-4 w-4" />
                 Dashboard
               </Link>
-              <form
-                action="/api/auth/signout"
-                method="POST"
-              >
-                <button
-                  type="submit"
-                  className="hidden items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 sm:flex"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Sign out
-                </button>
-              </form>
+              <LogoutButton
+                variant="primary"
+                label="Sign out"
+                className="hidden items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 sm:flex"
+              />
             </>
           ) : (
             <>

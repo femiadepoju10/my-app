@@ -21,60 +21,48 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const productId = Number(body.productId);
+    const productId = body.productId as string;
 
-    if (!productId || isNaN(productId)) {
+    if (!productId) {
       return NextResponse.json(
         { error: "Valid Product ID is required" },
         { status: 400 }
       );
     }
 
-    const buyerId = parseInt(session.user.id);
-
-    const product = await db.products.findUnique({
-      where: { id: productId },
-    });
-
-    if (!product) {
-      return NextResponse.json(
-        { error: "Product not found" },
-        { status: 404 }
-      );
-    }
-
-    if (product.status !== "active") {
-      return NextResponse.json(
-        { error: "Product is not available" },
-        { status: 400 }
-      );
-    }
-
-    if (product.sellerId === buyerId) {
-      return NextResponse.json(
-        { error: "You cannot buy your own product" },
-        { status: 400 }
-      );
-    }
-
-    const existingTransaction = await db.transactions.findFirst({
-      where: {
-        productId,
-        status: "payment_pending",
-      },
-    });
-
-    if (existingTransaction) {
-      return NextResponse.json(
-        { error: "Someone is already checking out this product" },
-        { status: 400 }
-      );
-    }
-
-    const serviceFee = Math.round(product.price * 0.1);
-    const totalAmount = product.price + serviceFee;
+    const buyerId = session.user.id;
 
     const transaction = await db.$transaction(async (tx) => {
+      const product = await tx.products.findUnique({
+        where: { id: productId },
+      });
+
+      if (!product) {
+        throw new Error("Product not found");
+      }
+
+      if (product.status !== "active") {
+        throw new Error("Product is not available");
+      }
+
+      if (product.sellerId === buyerId) {
+        throw new Error("You cannot buy your own product");
+      }
+
+      const existingTransaction = await tx.transactions.findFirst({
+        where: {
+          productId,
+          status: "payment_pending",
+        },
+      });
+
+      if (existingTransaction) {
+        throw new Error("Someone is already checking out this product");
+      }
+
+      const serviceFee = Math.round(product.price * 0.1);
+      const totalAmount = product.price + serviceFee;
+
       const newTransaction = await tx.transactions.create({
         data: {
           productId,
@@ -87,25 +75,28 @@ export async function POST(req: Request) {
         },
       });
 
-      await tx.products.update({
-        where: { id: productId },
+      const updateResult = await tx.products.updateMany({
+        where: { id: productId, status: "active" },
         data: { status: "reserved", updatedAt: new Date().toISOString() },
       });
 
-      return newTransaction;
+      if (updateResult.count === 0) {
+        throw new Error("Product was just taken by another buyer");
+      }
+
+      return { transaction: newTransaction, sellerId: product.sellerId, productTitle: product.title };
     });
 
-    createNotification(
-      product.sellerId,
-      "transaction",
-      `Your item "${product.title}" has been purchased! Payment is pending.`
-    ).catch(() => {});
+    createNotification(transaction.sellerId, "transaction", `Your item "${transaction.productTitle}" has been purchased! Payment is pending.`).catch(() => {});
 
-    return NextResponse.json({ transactionId: transaction.id });
+    return NextResponse.json({ transactionId: transaction.transaction.id });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Something went wrong";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const status = message.includes("not found") || message.includes("not available") || message.includes("cannot buy") || message.includes("checking out") || message.includes("just taken")
+      ? 400
+      : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }
 
@@ -117,7 +108,7 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const role = searchParams.get("role") || "buyer";
-  const userId = parseInt(session.user.id);
+  const userId = session.user.id;
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
   const limit = 20;
   const offset = (page - 1) * limit;

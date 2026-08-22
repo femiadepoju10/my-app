@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, ShoppingCart, Tag, LayoutDashboard, Shield, LogOut } from "lucide-react";
-import { signOut } from "next-auth/react";
+import { Menu, X, ShoppingCart, Tag, LayoutDashboard, Shield } from "lucide-react";
+import LogoutButton from "./LogoutButton";
 
 interface SessionUser {
   user?: {
@@ -106,15 +106,12 @@ export default function MobileMenu({ session }: { session: SessionUser | null })
                     Dashboard
                   </Link>
                   <div className="my-2 border-t border-zinc-200 dark:border-zinc-800" />
-                  <button
-                    onClick={() => {
-                      signOut({ callbackUrl: "/" });
-                    }}
+                  <LogoutButton
+                    variant="outline"
+                    label="Sign out"
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Sign out
-                  </button>
+                    mobile={true}
+                  />
                 </>
               )}
 

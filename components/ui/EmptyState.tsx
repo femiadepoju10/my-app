@@ -1,8 +1,7 @@
-import { LucideIcon } from "lucide-react";
-import { Package, ShoppingCart, Bell, Inbox, Search } from "lucide-react";
+import { LucideIcon, Package, ShoppingCart, Bell, Inbox, Search, Heart } from "lucide-react";
 import { Button } from "./Button";
 
-type EmptyStateIcon = "package" | "cart" | "bell" | "inbox" | "search";
+type EmptyStateIcon = "package" | "cart" | "bell" | "inbox" | "search" | "heart";
 
 const iconMap: Record<EmptyStateIcon, LucideIcon> = {
   package: Package,
@@ -10,6 +9,7 @@ const iconMap: Record<EmptyStateIcon, LucideIcon> = {
   bell: Bell,
   inbox: Inbox,
   search: Search,
+  heart: Heart,
 };
 
 interface EmptyStateProps {

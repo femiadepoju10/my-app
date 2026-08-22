@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     data: { resetToken: token, resetTokenExpiry: expiry },
   });
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
   await sendPasswordResetEmail(user.email, user.name, token, baseUrl);
 
   return NextResponse.json({ message: "If an account exists, a reset link has been sent." });

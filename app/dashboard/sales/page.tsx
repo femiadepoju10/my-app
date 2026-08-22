@@ -11,15 +11,15 @@ import EmptyState from "@/components/ui/EmptyState";
 import { TrendingUp, Loader2 } from "lucide-react";
 
 interface Transaction {
-  id: number;
+  id: string;
   itemPrice: number;
   serviceFee: number;
   totalAmount: number;
   status: string;
   createdAt: string;
-  productId: number;
+  productId: string;
   product?: {
-    id: number;
+    id: string;
     title: string;
     condition: string;
     images: { imageUrl: string }[];

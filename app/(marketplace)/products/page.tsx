@@ -17,13 +17,14 @@ interface ProductImage {
 }
 
 interface Product {
-  id: number;
+  id: string;
   title: string;
   price: number;
   condition: string;
   location: string;
   status: string;
   images: ProductImage[];
+  seller?: { id: string; name: string };
 }
 
 interface ProductsResponse {

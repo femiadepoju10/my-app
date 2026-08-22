@@ -1,10 +1,11 @@
 import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export async function middleware(req: any) {
+export default async function proxy(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   const isLoggedIn = !!token;
-  const userRole = token?.role;
+  const userRole = (token as { role?: string } | null)?.role;
 
   const { nextUrl } = req;
 
@@ -45,5 +46,13 @@ export async function middleware(req: any) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/checkout/:path*", "/transaction/:path*", "/admin/:path*", "/products/sell/:path*", "/login", "/signup"],
+  matcher: [
+    "/dashboard/:path*",
+    "/checkout/:path*",
+    "/transaction/:path*",
+    "/admin/:path*",
+    "/products/sell/:path*",
+    "/login",
+    "/signup",
+  ],
 };
