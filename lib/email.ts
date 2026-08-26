@@ -2,7 +2,18 @@ import { Resend } from "resend";
 import { db } from "@/lib/db";
 import { formatPrice } from "@/lib/utils";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resend: Resend | null = null;
+
+function getResend(): Resend {
+  if (!resend) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      throw new Error("RESEND_API_KEY is not set");
+    }
+    resend = new Resend(apiKey);
+  }
+  return resend;
+}
 
 const FROM = "PassitOn <onboarding@resend.dev>";
 
@@ -16,7 +27,11 @@ async function sendEmail(to: string, subject: string, html: string) {
     return;
   }
 
-  await resend.emails.send({ from: FROM, to, subject, html });
+  try {
+    await getResend().emails.send({ from: FROM, to, subject, html });
+  } catch (error) {
+    console.error("[EMAIL] Failed to send:", (error as Error).message);
+  }
 }
 
 function emailWrapper(title: string, body: string): string {
