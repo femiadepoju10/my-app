@@ -15,29 +15,38 @@ export const authOptions = {
           return null;
         }
 
-        const user = await db.users.findFirst({
-          where: { email: credentials.email as string },
-        });
-
-        if (!user || user.deletedAt) {
-          return null;
+        if (!process.env.DATABASE_URL) {
+          throw new Error("DATABASE_URL is not configured");
         }
 
-        const passwordMatch = await bcrypt.compare(
-          credentials.password as string,
-          user.passwordHash
-        );
+        try {
+          const user = await db.users.findFirst({
+            where: { email: credentials.email as string },
+          });
 
-        if (!passwordMatch) {
-          return null;
+          if (!user || user.deletedAt) {
+            return null;
+          }
+
+          const passwordMatch = await bcrypt.compare(
+            credentials.password as string,
+            user.passwordHash
+          );
+
+          if (!passwordMatch) {
+            return null;
+          }
+
+          return {
+            id: String(user.id),
+            name: user.name,
+            email: user.email,
+            role: user.role,
+          };
+        } catch (error) {
+          console.error("[Auth] authorize error:", error);
+          throw new Error("Authentication service unavailable");
         }
-
-        return {
-          id: String(user.id),
-          name: user.name,
-          email: user.email,
-          role: user.role,
-        };
       },
     }),
   ],

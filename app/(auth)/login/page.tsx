@@ -36,7 +36,11 @@ function LoginContent() {
       setLoading(false);
 
       if (result?.error) {
-        setError("Invalid email or password");
+        if (result.error === "CredentialsSignin") {
+          setError("Invalid email or password");
+        } else {
+          setError(result.error || "Something went wrong. Please try again.");
+        }
         return;
       }
 

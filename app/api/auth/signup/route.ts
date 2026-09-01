@@ -24,6 +24,14 @@ const signupSchema = z
 
 export async function POST(req: Request) {
   try {
+    if (!process.env.DATABASE_URL) {
+      console.error("[Signup] DATABASE_URL is not set");
+      return NextResponse.json(
+        { error: { general: ["Server configuration error. Please contact support."] } },
+        { status: 500 }
+      );
+    }
+
     const ip = getClientIp(req);
     const { allowed, retryAfterMs } = checkRateLimit(`signup:${ip}`, 5, 15 * 60 * 1000);
 
@@ -118,7 +126,8 @@ export async function POST(req: Request) {
       { message: "Account created successfully", userId: newUser.id },
       { status: 201 }
     );
-  } catch {
+  } catch (error) {
+    console.error("[Signup] Error:", error);
     return NextResponse.json(
       { error: { general: ["Something went wrong"] } },
       { status: 500 }
